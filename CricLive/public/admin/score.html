@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Scoring console - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="section-title"><h1 style="margin:0">Scoring console</h1>
+    <div style="display:flex;gap:8px"><a class="btn" href="/admin/">&larr; Admin panel</a><a class="btn" id="publicLink" target="_blank">Open viewer page</a></div></div>
+  <div class="layout">
+    <div>
+      <div id="board"></div>
+      <div class="card" style="margin-top:16px" id="console"></div>
+    </div>
+    <aside>
+      <div class="card"><div class="tabs"><button data-tab="comm" class="active">Balls</button><button data-tab="card">Scorecard</button></div>
+        <div data-pane="comm" id="comm"></div><div data-pane="card" class="hide" id="card"></div></div>
+    </aside>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/render.js"></script>
+<script src="/js/fx.js"></script>
+<script>
+const id = Number(qs('id'));
+$('#publicLink').href = '/match.html?id=' + id;
+let S = null, extra = null, busy = false, showWicket = false;
+
+renderHeader('admin').then(me => { if (!me.admin) location.href = '/login.html'; else api('/api/matches/' + id).then(draw).catch(e => toast(e.message, 'error')); });
+$$('.tabs button').forEach(b => b.onclick = () => {
+  $$('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+  $$('[data-pane]').forEach(p => p.classList.toggle('hide', p.dataset.pane !== b.dataset.tab));
+});
+liveStream(id, { match: s => { if (!busy) draw(s); } }); // keeps two scorers / tabs in sync
+
+async function act(path, body) {
+  if (busy) return;
+  busy = true;
+  try { const s = await api(`/api/admin/matches/${id}/${path}`, { method: 'POST', body: body || {} }); extra = null; showWicket = false; draw(s); }
+  catch (e) { toast(e.message, 'error'); }
+  finally { busy = false; }
+}
+
+const cur = () => S.innings.find(i => i.innings_no === S.current && i.status === 'in_progress');
+const opt = (list, sel) => list.map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}${p.extra ? ' - ' + esc(p.extra) : ''}</option>`).join('');
+
+function draw(s) {
+  const prevSeq = S && S.commentary.length ? S.commentary[0].seq : 0;
+  // the scorer gets a lighter version of the viewers' celebration
+  if (S && s.commentary[0] && s.commentary[0].seq > prevSeq) CricFX.forBall(s.commentary[0].kind, { small: true });
+  if (S && S.status === 'live' && s.status === 'completed') {
+    const w = s.winner_team_id === s.team1.id ? s.team1 : s.winner_team_id === s.team2.id ? s.team2 : null;
+    setTimeout(() => CricFX.win({ team: w ? w.name : 'Match tied', sub: s.result_text, color: w && w.color, small: true }), 700);
+  }
+  S = s;
+  document.title = `Scoring ${s.team1.short_name} v ${s.team2.short_name} - CricLive`;
+  $('#board').innerHTML = renderScoreboard(s);
+  $('#comm').innerHTML = renderCommentary(s, prevSeq);
+  $('#card').innerHTML = renderScorecard(s);
+  const c = $('#console');
+  if (s.status === 'completed') return drawCompleted(c);
+  if (s.needs === 'start') return drawStart(c);
+  if (s.needs === 'batsmen') return drawBatsmen(c);
+  if (s.needs === 'bowler') return drawBowler(c);
+  drawPad(c);
+}
+
+// ------------------------------------------------ 1. toss + playing XI
+function drawStart(c) {
+  const t1 = S.team1, t2 = S.team2;
+  const xiBox = t => `<div class="card" style="box-shadow:none"><h3>${teamDot(t)}${esc(t.name)} - playing XI <span class="muted small" data-count="${t.id}"></span></h3>
+    <div class="check-list">${(S.squads[t.id] || []).map((p, i) => `<label><input type="checkbox" data-xi="${t.id}" value="${p.id}" ${i < 11 ? 'checked' : ''}>${esc(p.name)} <span class="muted small">${esc(p.role)}</span></label>`).join('')
+      || '<span class="muted">No players in this team. Add players in the admin panel first.</span>'}</div></div>`;
+  c.innerHTML = `<h2>Start match</h2>
+    <div class="form-grid">
+      <div><label>Toss won by</label><select id="tossW"><option value="${t1.id}">${esc(t1.name)}</option><option value="${t2.id}">${esc(t2.name)}</option></select></div>
+      <div><label>Elected to</label><select id="tossD"><option value="bat">Bat first</option><option value="bowl">Bowl first</option></select></div>
+    </div>
+    <div style="margin-top:14px">${xiBox(t1)}${xiBox(t2)}</div>
+    <div class="form-actions"><button class="btn primary" id="startBtn">Start match</button></div>`;
+  const count = () => [t1, t2].forEach(t => $(`[data-count="${t.id}"]`).textContent = `(${$$(`[data-xi="${t.id}"]:checked`).length} selected)`);
+  $$('[data-xi]').forEach(x => x.onchange = count); count();
+  $('#startBtn').onclick = () => act('start', {
+    toss_winner_id: Number($('#tossW').value), toss_decision: $('#tossD').value,
+    team1_xi: $$(`[data-xi="${t1.id}"]:checked`).map(x => Number(x.value)),
+    team2_xi: $$(`[data-xi="${t2.id}"]:checked`).map(x => Number(x.value)),
+  });
+}
+
+// ------------------------------------------------ 2. choose batsmen
+function drawBatsmen(c) {
+  const i = cur();
+  const avail = i.yet_to_bat;
+  const needS = !i.striker_id, needN = !i.non_striker_id;
+  const first = i.legal_balls === 0 && i.batting.length === 0;
+  c.innerHTML = `<h2>${first ? 'Opening batsmen' : 'New batsman'} - ${esc(i.batting_team.name)}</h2>
+    ${!first ? `<div class="hint">Wicket! Choose who comes in next.</div>` : ''}
+    <div class="form-grid" style="margin-top:12px">
+      ${needS ? `<div><label>Striker (faces next ball)</label><select id="bS">${opt(avail, avail[0] && avail[0].id)}</select></div>` : ''}
+      ${needN ? `<div><label>Non-striker</label><select id="bN">${opt(avail, avail[needS ? 1 : 0] && avail[needS ? 1 : 0].id)}</select></div>` : ''}
+    </div>
+    <div class="form-actions"><button class="btn primary" id="okBat">Confirm</button>${!first ? '<button class="btn" id="undoBtn">Undo last ball</button>' : ''}</div>`;
+  $('#okBat').onclick = () => act('batsmen', { striker_id: needS ? Number($('#bS').value) : null, non_striker_id: needN ? Number($('#bN').value) : null });
+  if ($('#undoBtn')) $('#undoBtn').onclick = undo;
+}
+
+// ------------------------------------------------ 3. choose bowler
+function drawBowler(c) {
+  const i = cur();
+  const figs = Object.fromEntries(i.bowling.map(b => [b.id, `${b.overs}-${b.maidens}-${b.runs}-${b.wickets}`]));
+  const list = (S.xi[i.bowling_team.id] || []).filter(p => p.id !== i.last_over_bowler_id).map(p => ({ ...p, extra: figs[p.id] || p.role }));
+  c.innerHTML = `<h2>${i.legal_balls ? 'Over complete - next bowler' : 'Opening bowler'} (${esc(i.bowling_team.name)})</h2>
+    ${i.last_over_bowler_id ? '<p class="small muted">The bowler of the last over cannot bowl two overs in a row.</p>' : ''}
+    <div class="form-grid"><div><label>Bowler</label><select id="bw">${opt(list)}</select></div></div>
+    <div class="form-actions"><button class="btn primary" id="okBowl">Confirm bowler</button>${i.legal_balls || S.commentary.length ? '<button class="btn" id="undoBtn">Undo last ball</button>' : ''}</div>`;
+  $('#okBowl').onclick = () => act('bowler', { bowler_id: Number($('#bw').value) });
+  if ($('#undoBtn')) $('#undoBtn').onclick = undo;
+}
+
+// ------------------------------------------------ 4. ball by ball pad
+function drawPad(c) {
+  const i = cur();
+  const bxi = S.xi[i.bowling_team.id] || [];
+  const striker = i.batting.find(b => b.id === i.striker_id), non = i.batting.find(b => b.id === i.non_striker_id);
+  const ex = [['wd', 'Wide'], ['nb', 'No ball'], ['b', 'Bye'], ['lb', 'Leg bye']];
+  const extraHelp = { wd: 'Wide: +1 run. Tap the number of extra runs taken (0 if none).', nb: 'No-ball: +1 run. Tap runs scored off the bat (0 if none).', b: 'Byes: tap the number of byes.', lb: 'Leg byes: tap the number of leg byes.' };
+  c.innerHTML = `${renderCrease(S)}
+    <div style="margin-top:16px">
+      <div class="extras">${ex.map(([k, l]) => `<button data-ex="${k}" class="${extra === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      ${extra ? `<div class="hint" style="margin-bottom:10px">${extraHelp[extra]}</div>` : ''}
+      <div class="pad">
+        ${[0, 1, 2, 3, 4, 5, 6].map(r => `<button data-run="${r}" class="${r === 4 ? 'r4' : r === 6 ? 'r6' : ''}" ${(extra === 'b' || extra === 'lb') && r === 0 ? 'disabled style="opacity:.35"' : ''}>${r}</button>`).join('')}
+        <button class="wk" id="wkBtn">OUT</button>
+      </div>
+    </div>
+    <div id="wkPanel" class="${showWicket ? '' : 'hide'}" style="margin-top:14px">
+      <div class="card" style="box-shadow:none;border-color:var(--wicket)">
+        <h3>Wicket${extra ? ' (on ' + ({ wd: 'wide', nb: 'no-ball', b: 'bye', lb: 'leg bye' })[extra] + ')' : ''}</h3>
+        <div class="form-grid">
+          <div><label>How out</label><select id="wType">
+            <option value="bowled">Bowled</option><option value="caught" selected>Caught</option><option value="caught_bowled">Caught &amp; bowled</option>
+            <option value="lbw">LBW</option><option value="stumped">Stumped</option><option value="run_out">Run out</option><option value="hit_wicket">Hit wicket</option></select></div>
+          <div><label>Batsman out</label><select id="wOut"><option value="${i.striker_id}">${esc(striker ? striker.name : '')} (striker)</option><option value="${i.non_striker_id}">${esc(non ? non.name : '')} (non-striker)</option></select></div>
+          <div id="wFieldWrap"><label>Fielder / keeper</label><select id="wField"><option value="">-</option>${opt(bxi)}</select></div>
+          <div id="wRunsWrap"><label>Runs completed before wicket</label><select id="wRuns"><option>0</option><option>1</option><option>2</option><option>3</option></select></div>
+        </div>
+        <div class="form-actions"><button class="btn primary" id="wOk" style="background:var(--wicket);border-color:var(--wicket)">Confirm wicket</button><button class="btn" id="wCancel">Cancel</button></div>
+      </div>
+    </div>
+    <div class="console-actions">
+      <button class="btn" id="undoBtn" ${S.commentary.length ? '' : 'disabled'}>&#8630; Undo last ball</button>
+      <button class="btn" id="swapBtn">&#8644; Swap strike</button>
+      <button class="btn danger" id="endBtn">End innings</button>
+    </div>
+    <p class="small muted" style="margin-top:10px">Tip: keyboard works too - keys 0-6 for runs, W for wicket, U for undo.</p>`;
+
+  $$('[data-ex]').forEach(b => b.onclick = () => { extra = extra === b.dataset.ex ? null : b.dataset.ex; drawPad(c); });
+  $$('[data-run]').forEach(b => b.onclick = () => act('ball', { runs: Number(b.dataset.run), extra }));
+  $('#wkBtn').onclick = () => { showWicket = !showWicket; drawPad(c); };
+  $('#undoBtn').onclick = undo;
+  $('#swapBtn').onclick = () => act('swap');
+  $('#endBtn').onclick = () => { if (confirm('End this innings now? (use for all-out / rain / declaration)')) act('end-innings'); };
+  const syncW = () => {
+    const t = $('#wType').value;
+    $('#wFieldWrap').classList.toggle('hide', !['caught', 'stumped', 'run_out'].includes(t));
+    $('#wRunsWrap').classList.toggle('hide', t !== 'run_out');
+    $('#wOut').disabled = t !== 'run_out';
+    if (t !== 'run_out') $('#wOut').value = String(i.striker_id);
+    if (t === 'stumped') { const k = bxi.find(p => p.role === 'Wicket-keeper'); if (k) $('#wField').value = k.id; }
+  };
+  if (showWicket) {
+    if (extra === 'wd') $('#wType').value = 'stumped';
+    if (extra === 'nb' || extra === 'b' || extra === 'lb') $('#wType').value = 'run_out';
+    $('#wType').onchange = syncW; syncW();
+    $('#wCancel').onclick = () => { showWicket = false; drawPad(c); };
+    $('#wOk').onclick = () => {
+      const type = $('#wType').value;
+      act('ball', {
+        runs: type === 'run_out' ? Number($('#wRuns').value) : 0, extra,
+        wicket: { type, player_out_id: Number($('#wOut').value), fielder_id: $('#wField').value ? Number($('#wField').value) : null },
+      });
+    };
+  }
+}
+
+function drawCompleted(c) {
+  c.innerHTML = `<h2>Match completed</h2><div class="hint">${esc(S.result_text)}</div>
+    <div class="form-actions"><a class="btn primary" href="/match.html?id=${S.id}">View final scorecard</a><button class="btn" id="undoBtn">Undo last ball (re-open match)</button></div>`;
+  $('#undoBtn').onclick = undo;
+}
+
+function undo() { if (confirm('Undo the last ball?')) act('undo'); }
+
+document.addEventListener('keydown', e => {
+  if (!S || S.needs !== 'ball' || showWicket || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (/^[0-6]$/.test(e.key)) { if ((extra === 'b' || extra === 'lb') && e.key === '0') return; act('ball', { runs: Number(e.key), extra }); }
+  else if (e.key.toLowerCase() === 'w') { showWicket = true; drawPad($('#console')); }
+  else if (e.key.toLowerCase() === 'u') undo();
+});
+</script>
+</body>
+</html>

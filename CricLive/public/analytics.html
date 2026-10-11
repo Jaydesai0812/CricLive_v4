@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>AI Analytics - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="card">
+    <h1 style="margin-bottom:6px">AI player analytics</h1>
+    <p class="muted" style="margin:0">CricLive groups every player into a <b>player type</b> using <b>K-Means clustering</b>, the same method as customer
+      segmentation (RFM + K-Means). Instead of recency, frequency and spend, it uses cricket numbers: runs per match, strike rate, boundary %,
+      wickets per match and balls bowled per match. The groups update automatically as new matches are scored.</p>
+    <details style="margin-top:10px"><summary class="small" style="cursor:pointer"><b>How it works (step by step)</b></summary>
+      <ol class="small" style="margin-top:8px">
+        <li><b>Feature table</b>: one row per player who has batted twice or bowled 2+ overs (from the <code>player_stats</code> table).</li>
+        <li><b>Shrinkage</b>: strike rate and boundary % are pulled towards a neutral value when a player has faced only a few balls, so one lucky hit does not mislead the model.</li>
+        <li><b>Log transform</b> (<code>log1p</code>) to reduce skew, then <b>standard scaling</b> (z-scores) so every feature counts equally.</li>
+        <li><b>Elbow method</b>: K-Means is run for k = 2 to 8 and the inertia is plotted. The bend in the curve suggests k = 4.</li>
+        <li><b>Final model</b>: K-Means with k = 4, k-means++ start, best of 10 seeded runs (repeatable results).</li>
+        <li><b>Profiling</b>: each cluster's average stats are compared and the cluster is named (Power Hitters, Anchor Batters, Strike Bowlers ...), with a coaching recommendation.</li>
+      </ol></details>
+  </div>
+  <div id="notReady"></div>
+  <div class="tiles" id="tiles" style="margin:16px 0"></div>
+  <div class="chart-grid">
+    <div class="card"><div id="cElbow"></div></div>
+    <div class="card"><div id="cCount"></div></div>
+    <div class="card"><div id="cSR"></div></div>
+    <div class="card"><div id="cRuns"></div></div>
+    <div class="card"><div id="cWkts"></div></div>
+    <div class="card"><div id="cBnd"></div></div>
+  </div>
+  <div class="section-title"><h2>Player segments &amp; recommendations</h2></div>
+  <div class="grid grid-2" id="segs"></div>
+  <div class="section-title"><h2>All players</h2><select id="segFilter" style="max-width:240px"></select></div>
+  <div class="card table-wrap"><table>
+    <thead><tr><th>Player</th><th>Team</th><th>AI player type</th><th class="num">M</th><th class="num">Runs</th><th class="num">SR</th><th class="num">Bdry %</th><th class="num">Wkts</th><th class="num">Econ</th></tr></thead>
+    <tbody id="list"></tbody></table></div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/charts.js"></script>
+<script>
+renderHeader('analytics');
+const tile = (k, v) => `<div class="tile"><div class="v">${esc(v)}</div><div class="k">${k}</div></div>`;
+let A = null;
+function list() {
+  const f = $('#segFilter').value;
+  const rows = A.players.filter(p => !f || p.segment === f).sort((a, b) => (b.runs + b.wickets * 20) - (a.runs + a.wickets * 20));
+  $('#list').innerHTML = rows.map(p => `<tr><td><a href="/player.html?id=${p.id}"><b>${esc(p.name)}</b></a><div class="dismissal">${esc(p.role)}</div></td>
+    <td>${esc(p.team || '')}</td><td><span class="seg-badge">${esc(p.segment)}</span></td><td class="num">${p.matches}</td><td class="num">${p.runs}</td>
+    <td class="num">${p.strike_rate}</td><td class="num">${p.boundary_pct}</td><td class="num">${p.wickets}</td><td class="num">${p.economy ?? '-'}</td></tr>`).join('');
+}
+async function load() {
+  A = await api('/api/analytics');
+  if (!A.ready) { $('#notReady').innerHTML = `<div class="empty" style="margin-top:16px">${esc(A.message)}</div>`; return; }
+  const segs = A.segments;
+  $('#tiles').innerHTML = tile('Players analysed', A.total) + tile('Features', A.features.length) + tile('Segments (k)', A.k) + tile('Largest segment', segs.slice().sort((a, b) => b.count - a.count)[0].name);
+  Charts.line($('#cElbow'), { title: 'Elbow method', subtitle: 'Inertia for each number of clusters (k) - the bend shows a good k',
+    labels: A.elbow.map(e => String(e.k)), tips: A.elbow.map(e => 'k = ' + e.k), series: [{ name: 'Inertia', values: A.elbow.map(e => e.inertia) }], labelName: 'k',
+    markers: [] });
+  const bar = (el, title, sub, key, slot, name) => Charts.bar($(el), { title, subtitle: sub, data: segs.map(s => ({ label: s.name.split(' ')[0], tip: s.name, value: key ? s.avg[key] : s.count, extra: key ? '' : s.percentage + '% of players' })), valueName: name, labelName: 'Segment', slot, valueLabels: true });
+  bar('#cCount', 'Players in each segment', 'Distribution of players by AI player type', null, 0, 'Players');
+  bar('#cSR', 'Average strike rate by segment', 'Runs per 100 balls (shrunk for small samples)', 'strike_rate', 1, 'Strike rate');
+  bar('#cRuns', 'Average runs per match by segment', '', 'runs_per_match', 0, 'Runs per match');
+  bar('#cWkts', 'Average wickets per match by segment', '', 'wickets_per_match', 2, 'Wickets per match');
+  bar('#cBnd', 'Average boundary % by segment', 'Share of balls faced hit for 4 or 6', 'boundary_pct', 3, 'Boundary %');
+  $('#segs').innerHTML = segs.map(s => `<div class="card seg-card"><h3 style="margin-bottom:2px">${esc(s.name)} <span class="muted small">${s.count} players &middot; ${s.percentage}%</span></h3>
+    <p class="small muted" style="margin:0 0 8px">${esc(s.description)}</p>
+    <div class="small"><b>Average:</b> ${s.avg.runs_per_match} runs/match &middot; SR ${s.avg.strike_rate} &middot; ${s.avg.boundary_pct}% boundaries &middot; ${s.avg.wickets_per_match} wkts/match</div>
+    <div class="hint" style="margin-top:8px"><b>Recommendation:</b> ${esc(s.recommendation)}</div>
+    <div class="small" style="margin-top:8px"><b>Examples:</b> ${s.top.map(p => `<a href="/player.html?id=${p.id}">${esc(p.name)}</a> (${esc(p.team || '')})`).join(', ')}</div></div>`).join('');
+  $('#segFilter').innerHTML = '<option value="">All segments</option>' + segs.map(s => `<option>${esc(s.name)}</option>`).join('');
+  list();
+}
+$('#segFilter').onchange = list;
+load();
+let t; liveStream(null, { stats() { clearTimeout(t); t = setTimeout(load, 3000); } });
+</script>
+</body>
+</html>

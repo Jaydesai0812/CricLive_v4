@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Contact us and report a bug - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <h1>Contact us</h1>
+  <p class="muted" style="margin-top:-6px;max-width:60ch">Found something broken, have a question, or an idea for CricLive? Send it here. Every message goes straight to the league admins.</p>
+  <div class="contact-grid" style="margin-top:18px">
+    <div class="card" id="formCard">
+      <form id="f" novalidate>
+        <div class="kind-pick" role="radiogroup" aria-label="What is it about?">
+          <label><input type="radio" name="kind" value="bug" checked><span class="ico" aria-hidden="true">&#128027;</span><b>Report a bug</b><span>Something isn't working</span></label>
+          <label><input type="radio" name="kind" value="question"><span class="ico" aria-hidden="true">&#10067;</span><b>Ask a question</b><span>About matches or your account</span></label>
+          <label><input type="radio" name="kind" value="idea"><span class="ico" aria-hidden="true">&#128161;</span><b>Suggest an idea</b><span>Something we could add</span></label>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label for="name">Your name</label><input id="name" name="name" maxlength="80" required autocomplete="name"></div>
+          <div class="field"><label for="email">Your email (so we can reply)</label><input id="email" name="email" type="email" maxlength="100" required autocomplete="email"></div>
+        </div>
+        <div class="field"><label for="page">Which page? (optional)</label><input id="page" name="page" maxlength="120" placeholder="For example: the scoring console"></div>
+        <div class="field"><label for="msg" id="msgLabel">What happened?</label><textarea id="msg" name="message" maxlength="3000" required placeholder="What did you do, what did you expect, and what happened instead?"></textarea>
+          <div class="field-hint" id="count">0 / 3000</div></div>
+        <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <label style="display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink)"><input type="checkbox" id="dev" checked style="width:auto;min-height:0"> Include my device and browser details (helps us fix bugs)</label>
+        <div class="form-actions"><button class="btn primary">Send message</button></div>
+      </form>
+    </div>
+    <aside>
+      <div class="card"><h3>Reporting a bug? This helps</h3>
+        <ol class="small" style="padding-left:18px;margin:0;display:grid;gap:6px">
+          <li>The page you were on and what you clicked.</li>
+          <li>What you expected to see, and what you saw.</li>
+          <li>If it happens every time or only sometimes.</li>
+        </ol></div>
+      <div class="card faq"><h3>Common questions</h3>
+        <details><summary>I didn't get my sign-in code</summary><p class="small muted">Check your spam folder and wait a minute. You can press "Send a new code" after 30 seconds. Codes expire after 5 minutes.</p></details>
+        <details><summary>My account is locked</summary><p class="small muted">After 5 wrong passwords, sign-in pauses for 5 minutes to protect your account. Wait, then try again.</p></details>
+        <details><summary>My stats are wrong</summary><p class="small muted">Stats are rebuilt from every ball scored. If a ball was entered wrongly, ask the scorer to undo it; your stats correct themselves.</p></details>
+        <details><summary>How do I join a team?</summary><p class="small muted">Create a player account, then ask your club admin to add you to their team.</p></details>
+      </div>
+    </aside>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/auth.js"></script>
+<script>
+const f = $('#f');
+renderHeader('contact').then(me => {
+  const who = me.player || me.admin;
+  if (who && !f.name.value) f.name.value = who.name;
+});
+if (qs('type')) { const r = f.querySelector(`[name=kind][value="${qs('type')}"]`); if (r) r.checked = true; }
+if (document.referrer && new URL(document.referrer).origin === location.origin) f.page.value = new URL(document.referrer).pathname.replace(/^\/$/, '/ (home)');
+const labels = { bug: 'What happened?', question: 'Your question', idea: 'Your idea' };
+const syncKind = () => ($('#msgLabel').textContent = labels[f.kind.value]);
+f.querySelectorAll('[name=kind]').forEach(r => r.addEventListener('change', syncKind)); syncKind();
+f.message.addEventListener('input', () => ($('#count').textContent = `${f.message.value.length} / 3000`));
+const em = Auth.emailField(f.email);
+f.onsubmit = async e => {
+  e.preventDefault();
+  const d = Object.fromEntries(new FormData(f));
+  const fail = m => { toast(m, 'error'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); };
+  if (!d.name.trim()) return fail('Please tell us your name');
+  const h = Auth.emailHint(d.email); if (!h || h.bad) { em.check(); return fail(h ? h.bad : 'Please enter your email so we can reply'); }
+  if (d.message.trim().length < 10) return fail('Please describe it in a little more detail');
+  if ($('#dev').checked) d.device = `${navigator.userAgent.match(/(Edg|Chrome|Firefox|Safari)\/[\d.]+/)?.[0] || 'Browser'} on ${navigator.platform || 'device'}, screen ${screen.width}x${screen.height}`;
+  const btn = f.querySelector('.btn.primary'); btn.classList.add('loading'); btn.disabled = true;
+  try {
+    const r = await api('/api/feedback', { method: 'POST', body: d });
+    $('#formCard').innerHTML = `<div class="sent step-in"><div class="tick"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h2>Thanks, message sent</h2><p class="muted">Your reference is <b>${esc(r.ref)}</b>. We'll reply to ${esc(d.email)}.</p>
+      <div class="form-actions" style="justify-content:center"><a class="btn" href="/">Back to scores</a><a class="btn primary" href="/contact.html">Send another</a></div></div>`;
+  } catch (err) { fail(err.message); btn.classList.remove('loading'); btn.disabled = false; }
+};
+</script>
+</body>
+</html>

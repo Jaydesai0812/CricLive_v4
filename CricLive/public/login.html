@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Sign in - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth-page">
+  <section class="auth-art">
+    <div><h1>Welcome back to the crease</h1><p>Sign in with your password and a one-time code we email you. Even if someone learns your password, they can't get in without your inbox.</p></div>
+    <div id="art"></div>
+    <ul class="points"><li>Codes expire after 5 minutes and work once</li><li>5 wrong tries and the code is cancelled</li><li>Accounts lock for 5 minutes after 5 wrong passwords</li></ul>
+  </section>
+  <section class="auth-panel"><div class="inner"><h2>Sign in</h2><p class="muted" style="margin-top:0">Players, admins and scorers all sign in here.</p><div id="box"></div></div></section>
+</div>
+<script src="/js/common.js"></script>
+<script src="/js/fx.js"></script>
+<script src="/js/auth.js"></script>
+<script>
+renderHeader('').then(me => {
+  if (me.admin || me.player) { toast('You are already signed in'); }
+});
+$('#art').innerHTML = Auth.artScene();
+Auth.mountSignIn($('#box'), { who: qs('who') === 'staff' ? 'staff' : 'player', next: qs('next') && qs('next').startsWith('/') && !qs('next').startsWith('//') ? qs('next') : null });
+</script>
+</body>
+</html>

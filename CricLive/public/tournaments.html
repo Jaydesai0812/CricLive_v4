@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Tournaments - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <h1>Tournaments</h1>
+  <div class="grid grid-2" id="list"></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+renderHeader('tournaments');
+api('/api/tournaments').then(ts => $('#list').innerHTML = ts.map(t => `<a class="card match-card" href="/tournament.html?id=${t.id}">
+  <h2 style="margin-bottom:4px">${esc(t.name)}</h2>
+  <div class="muted small">${esc(t.organizer || '')}${t.venue ? ' &middot; ' + esc(t.venue) : ''}</div>
+  <div class="small" style="margin-top:8px">${fmtDate(t.start_date, false)} - ${fmtDate(t.end_date, false)} &middot; ${t.overs} overs &middot; ${t.teams} teams &middot; ${t.matches} matches</div></a>`).join('')
+  || '<div class="empty">No tournaments yet.</div>');
+</script>
+</body>
+</html>

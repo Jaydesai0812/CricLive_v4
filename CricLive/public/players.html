@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Players - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="section-title"><h1>Players</h1><input id="q" placeholder="Search player or team..." style="max-width:280px"></div>
+  <div class="card table-wrap"><table>
+    <thead><tr><th>Player</th><th>Team</th><th>Role</th><th class="num">M</th><th class="num">Runs</th><th class="num">Wkts</th></tr></thead>
+    <tbody id="list"></tbody></table></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+renderHeader('players');
+async function load() {
+  const rows = await api('/api/players?q=' + encodeURIComponent($('#q').value));
+  $('#list').innerHTML = rows.map(p => `<tr><td><a href="/player.html?id=${p.id}"><b>${esc(p.first_name)} ${esc(p.last_name)}</b></a></td>
+    <td>${p.team_name ? `<a href="/team.html?id=${p.team_id}">${teamDot(p)}${esc(p.team_name)}</a>` : '<span class="muted">No team</span>'}</td>
+    <td>${esc(p.role)}</td><td class="num">${p.matches}</td><td class="num">${p.runs}</td><td class="num">${p.wickets}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="muted">No players found</td></tr>';
+}
+let t; $('#q').oninput = () => { clearTimeout(t); t = setTimeout(load, 250); };
+load();
+liveStream(null, { stats() { clearTimeout(t); t = setTimeout(load, 400); } });
+</script>
+</body>
+</html>

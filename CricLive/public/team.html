@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Team - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap" id="page"><div class="loader" role="status"><span class="spin-ball" aria-hidden="true"></span>Loading…</div></main>
+<script src="/js/common.js"></script>
+<script src="/js/charts.js"></script>
+<script>
+renderHeader('teams');
+const id = Number(qs('id'));
+const tile = (k, v) => `<div class="tile"><div class="v">${esc(v)}</div><div class="k">${k}</div></div>`;
+Promise.all([api('/api/teams/' + id), api('/api/teams/' + id + '/charts')]).then(([t, c]) => {
+  document.title = t.name + ' - CricLive';
+  const s = c.summary;
+  $('#page').innerHTML = `<div class="card"><div class="profile-head">${teamLogo(t).replace('team-logo', 'team-logo avatar')}
+      <div style="flex:1"><h1 style="margin:0">${esc(t.name)}</h1><div class="muted">${esc(t.city || '')} &middot; ${t.players.length} players</div></div>
+      <div id="followSlot"></div></div>
+      <div class="tiles" style="margin-top:14px">${tile('Played', s.played)}${tile('Won', s.won)}${tile('Lost', s.lost)}${tile('Tied', s.tied)}${tile('No result', s.nr)}${tile('Win %', s.win_pct + '%')}</div></div>
+    <div class="section-title"><h2>Team charts</h2></div>
+    <div class="chart-grid">${chartCard('cRuns', true)}${chartCard('cBat')}${chartCard('cBowl')}${chartCard('cPhase')}
+      <div class="card"><h3>&#9733; AI suggested playing XI</h3><p class="small muted" style="margin-top:-6px">Balanced XI picked from career stats: keeper, 5 best bowlers by wickets &amp; economy, then best batters by average &amp; strike rate.</p>
+        ${c.suggested_xi.length ? `<ol style="margin:0;padding-left:20px">${c.suggested_xi.map(p => `<li><a href="/player.html?id=${p.id}">${esc(p.name)}</a> <span class="muted small">${esc(p.role)} &middot; ${esc(p.reason)}</span></li>`).join('')}</ol>` : '<div class="muted">Needs at least 11 players.</div>'}</div>
+    </div>
+    <div class="layout" style="margin-top:20px">
+      <div class="card table-wrap"><h2>Squad</h2><table><tr><th>#</th><th>Player</th><th>Role</th><th class="num">M</th><th class="num">Runs</th><th class="num">Wkts</th></tr>
+        ${t.players.map(p => `<tr><td class="muted">${p.jersey_no ?? ''}</td><td><a href="/player.html?id=${p.id}"><b>${esc(p.first_name)} ${esc(p.last_name)}</b></a>
+          <div class="dismissal">${esc(p.batting_style || '')}${p.bowling_style ? ' &middot; ' + esc(p.bowling_style) : ''}</div></td>
+          <td>${esc(p.role)}</td><td class="num">${p.matches}</td><td class="num">${p.runs}</td><td class="num">${p.wickets}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No players</td></tr>'}</table></div>
+      <div><h2>Matches</h2><div class="grid">${t.matches.map(matchCard).join('') || '<div class="empty">No matches</div>'}</div></div>
+    </div>`;
+  $('#followSlot').appendChild(followButton('teams', t.id, 'team'));
+  Charts.grouped($('#cRuns'), {
+    title: 'Runs scored and conceded per match', subtitle: 'Hover a match for the result',
+    labels: c.matches.map((m, i) => String(i + 1)), tips: c.matches.map(m => `${m.label} - ${m.result === 'W' ? 'Won' : m.result === 'L' ? 'Lost' : 'Tied'} (${m.score})`),
+    series: [{ name: 'Runs scored', values: c.matches.map(m => m.scored) }, { name: 'Runs conceded', values: c.matches.map(m => m.conceded), slot: 1 }],
+    labelName: 'Match', empty: 'No completed matches yet', height: 250,
+  });
+  Charts.bar($('#cBat'), { title: 'Top run scorers', horizontal: true, data: c.top_batters.map(b => ({ label: b.label, value: b.value, extra: 'Strike rate ' + b.sr, href: '/player.html?id=' + b.id })), valueName: 'Runs', labelName: 'Player', empty: 'No runs yet' });
+  Charts.bar($('#cBowl'), { title: 'Top wicket takers', horizontal: true, slot: 2, data: c.top_bowlers.map(b => ({ label: b.label, value: b.value, extra: 'Economy ' + b.econ, href: '/player.html?id=' + b.id })), valueName: 'Wickets', labelName: 'Player', empty: 'No wickets yet' });
+  Charts.grouped($('#cPhase'), {
+    title: 'Run rate by phase of the innings', subtitle: 'Batting run rate vs runs conceded per over',
+    labels: c.phases.map(p => p.label), series: [{ name: 'Batting run rate', values: c.phases.map(p => p.batting) }, { name: 'Bowling economy', values: c.phases.map(p => p.bowling), slot: 1 }],
+    labelName: 'Phase', empty: 'No balls bowled yet',
+  });
+}).catch(e => $('#page').innerHTML = `<div class="empty">${esc(e.message)}</div>`);
+</script>
+</body>
+</html>

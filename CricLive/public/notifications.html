@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Match alerts - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap layout">
+  <div>
+    <div class="section-title"><h1 style="margin:0">Match alerts</h1><button class="btn" id="readAll" hidden>Mark all as read</button></div>
+    <div class="card" id="browserCard">
+      <h3>Pop-up alerts on this device</h3>
+      <p class="small muted" style="margin-top:-4px">Follow teams or matches and CricLive pops up alerts for match start, wickets, fifties, hundreds, 3-wicket hauls, innings breaks and results.
+        Turn on browser notifications to get them even when this tab is in the background.</p>
+      <button class="btn primary" id="enableBtn">Turn on browser notifications</button> <span class="small muted" id="permState"></span>
+    </div>
+    <div class="card"><h3>Notification inbox</h3><div id="inbox"></div></div>
+  </div>
+  <aside>
+    <div class="card"><h3>Teams you follow</h3><div id="teams"></div></div>
+    <div class="card"><h3>Upcoming fixtures</h3><div id="upcoming"></div></div>
+  </aside>
+</main>
+<script src="/js/common.js"></script>
+<script>
+const icon = k => ({ fixture: '&#128197;', start: '&#127951;', innings: '&#9208;', result: '&#127942;', milestone: '&#11088;', abandoned: '&#127783;', wicket: '&#10060;' }[k] || '&#128276;');
+function perm() {
+  if (!('Notification' in window)) { $('#permState').textContent = 'This browser does not support notifications.'; $('#enableBtn').disabled = true; return; }
+  $('#permState').textContent = { granted: 'On', denied: 'Blocked - allow notifications for this site in your browser settings', default: 'Off' }[Notification.permission];
+  $('#enableBtn').hidden = Notification.permission !== 'default';
+}
+$('#enableBtn').onclick = async () => { await Notification.requestPermission(); perm(); if (Notification.permission === 'granted') new Notification('CricLive alerts are on', { body: 'You will be alerted about the teams and matches you follow.' }); };
+
+async function teams() {
+  const list = await api('/api/teams');
+  $('#teams').innerHTML = '';
+  for (const t of list) {
+    const row = document.createElement('div'); row.className = 'leader-row'; row.style.alignItems = 'center';
+    row.innerHTML = `<a href="/team.html?id=${t.id}">${teamDot(t)}${esc(t.name)}</a>`;
+    row.appendChild(followButton('teams', t.id, ''));
+    $('#teams').appendChild(row);
+  }
+}
+async function inbox() {
+  if (!ME.player) {
+    $('#inbox').innerHTML = `<div class="empty">Log in as a player to keep an inbox of alerts (fixtures, results, your own milestones).<br><a href="/login.html">Login</a> or <a href="/register.html">register</a>.<br><br>Without logging in, pop-up alerts still work for the teams you follow on this device.</div>`;
+    const ms = await api('/api/matches?status=scheduled&limit=100');
+    const f = follows();
+    const mine = ms.filter(m => f.teams.includes(m.team1.id) || f.teams.includes(m.team2.id));
+    $('#upcoming').innerHTML = mine.map(m => `<div class="leader-row"><a href="/match.html?id=${m.id}">${esc(m.team1.short_name)} v ${esc(m.team2.short_name)}</a><span class="small muted">${fmtDate(m.match_date)}</span></div>`).join('') || '<div class="muted small">Follow a team to see its fixtures here.</div>';
+    return;
+  }
+  const d = await api('/api/me/notifications');
+  $('#readAll').hidden = !d.notifications.some(n => !n.is_read);
+  $('#inbox').innerHTML = d.notifications.map(n => `<a class="notif ${n.is_read ? '' : 'unread'}" href="${esc(n.link || '#')}" style="color:inherit;text-decoration:none">
+      <span class="ic">${icon(n.kind)}</span><span style="flex:1"><b>${esc(n.title)}</b><div class="small muted">${esc(n.body || '')}</div></span>
+      <span class="small muted" style="white-space:nowrap">${fmtDate(n.created_at)}</span></a>`).join('') || '<div class="empty">No notifications yet. Follow teams to get alerts.</div>';
+  $('#upcoming').innerHTML = d.upcoming.map(m => `<div class="leader-row"><a href="/match.html?id=${m.id}">${esc(m.team1.short_name)} v ${esc(m.team2.short_name)}</a><span class="small muted">${fmtDate(m.match_date)}</span></div>`).join('') || '<div class="muted small">No upcoming fixtures for the teams you follow.</div>';
+}
+$('#readAll').onclick = async () => { await api('/api/me/notifications/read', { method: 'POST' }); const c = $('.bell .count'); if (c) c.remove(); inbox(); };
+renderHeader('').then(() => { perm(); teams(); inbox(); });
+</script>
+</body>
+</html>

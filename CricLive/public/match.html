@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Match - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <div id="board"></div>
+  <div class="card" style="margin-top:16px">
+    <div class="tabs">
+      <button data-tab="live" class="active">Live</button>
+      <button data-tab="scorecard">Scorecard</button>
+      <button data-tab="charts">Charts</button>
+      <button data-tab="squads">Squads</button>
+      <span style="flex:1"></span><span id="followSlot" style="align-self:center"></span>
+    </div>
+    <div data-pane="live">
+      <div id="crease"></div>
+      <h3 style="margin-top:20px">Commentary <span class="live-note" id="liveNote"></span></h3>
+      <div id="comm"></div>
+    </div>
+    <div data-pane="scorecard" class="hide" id="scorecard"></div>
+    <div data-pane="charts" class="hide"><div class="chart-grid" id="charts"></div></div>
+    <div class="downloads" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+      <span class="small muted" style="margin-right:4px">Download this match:</span>
+      <a class="btn sm primary" id="dlReport" download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>Report with charts</a>
+      <a class="btn sm" id="dlBalls" download>Ball-by-ball (CSV)</a>
+      <a class="btn sm" id="dlCard" download>Scorecard (CSV)</a>
+    </div>
+    <div data-pane="squads" class="hide" id="squads"></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/render.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/fx.js"></script>
+<script>
+renderHeader('home');
+$('#board').innerHTML = loader('Loading match');
+const id = Number(qs('id'));
+let S = null;
+$('#dlReport').href = `/api/matches/${id}/download/report.html`;
+$('#dlBalls').href = `/api/matches/${id}/download/balls.csv`;
+$('#dlCard').href = `/api/matches/${id}/download/scorecard.csv`;
+$('#followSlot').appendChild(followButton('matches', id, 'match'));
+$$('.tabs button').forEach(b => b.onclick = () => {
+  $$('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+  $$('[data-pane]').forEach(p => p.classList.toggle('hide', p.dataset.pane !== b.dataset.tab));
+  if (b.dataset.tab === 'charts') loadCharts();
+});
+const chartsVisible = () => !$('[data-pane="charts"]').classList.contains('hide');
+async function loadCharts() {
+  const c = await api('/api/matches/' + id + '/charts');
+  if (!c.innings.length) { $('#charts').innerHTML = '<div class="empty" style="grid-column:1/-1">Charts appear once the match starts.</div>'; return; }
+  // build the chart cards once (so they animate in once); later balls just redraw them
+  if ($('#charts').dataset.n !== String(c.innings.length)) {
+    $('#charts').dataset.n = c.innings.length;
+    $('#charts').innerHTML = chartCard('cMan', true) + chartCard('cWorm', true) + c.innings.map(i => chartCard('cPart' + i.innings_no)).join('');
+  }
+  const labels = [...Array(c.overs)].map((_, i) => String(i + 1));
+  const name = i => i.team.short_name;
+  Charts.grouped($('#cMan'), {
+    title: 'Manhattan - runs per over', subtitle: 'Hover an over to compare both teams (W = wickets in that over)', labels,
+    tips: labels.map((l, o) => 'Over ' + l + c.innings.map(i => { const p = i.per_over[o]; return p && p.wickets ? ` | ${name(i)} ${p.wickets}W` : ''; }).join('')),
+    series: c.innings.map((i, j) => ({ name: name(i), slot: j, values: labels.map((_, o) => (i.per_over[o] ? i.per_over[o].runs : 0)) })),
+    labelName: 'Over', height: 250,
+  });
+  Charts.line($('#cWorm'), {
+    title: 'Worm - cumulative runs', subtitle: 'Dots mark overs where wickets fell', labels,
+    tips: labels.map(l => 'After over ' + l),
+    series: c.innings.map((i, j) => ({ name: name(i), slot: j, values: labels.map((_, o) => (i.worm[o] ? i.worm[o].runs : null)),
+      notes: labels.map((_, o) => (i.worm[o] && i.worm[o].wickets ? `(${i.worm[o].wickets} wkt)` : '')),
+      markers: i.worm.map((w, o) => (w.wickets ? { i: o } : null)).filter(Boolean) })),
+    labelName: 'Over', height: 260,
+  });
+  c.innings.forEach((i, j) => Charts.bar($('#cPart' + i.innings_no), {
+    title: `Partnerships - ${i.team.name}`, horizontal: true, slot: j,
+    data: i.partnerships.map(p => ({ label: `${p.wicket}. ${p.label}`, value: p.runs, extra: `${p.runs} runs off ${p.balls} balls` })), valueName: 'Runs', labelName: 'Partnership',
+  }));
+}
+let chartTimer;
+function draw(s) {
+  const prevSeq = S && S.commentary.length ? S.commentary[0].seq : 0;
+  document.title = `${s.team1.short_name} vs ${s.team2.short_name} - CricLive`;
+  $('#board').innerHTML = renderScoreboard(s);
+  $('#crease').innerHTML = s.status === 'live' ? renderCrease(s) : (s.status === 'completed' ? `<div class="hint">${esc(s.result_text)}</div>` : `<div class="empty">Match starts ${fmtDate(s.match_date)}. This page will update by itself when scoring begins.</div>`);
+  $('#comm').innerHTML = renderCommentary(s, prevSeq);
+  $('#scorecard').innerHTML = renderScorecard(s);
+  $('#squads').innerHTML = renderSquads(s);
+  celebrate(S, s);
+  S = s;
+  if (chartsVisible()) { clearTimeout(chartTimer); chartTimer = setTimeout(loadCharts, 400); }
+}
+// FOUR / SIX / WICKET / WIN animations when a new ball arrives
+function celebrate(prev, next) {
+  if (!prev) return;
+  const top = next.commentary[0];
+  if (top && (!prev.commentary.length || top.seq > prev.commentary[0].seq)) {
+    CricFX.forBall(top.kind, { sub: top.text });
+    $$('.scoreboard .team-line.batting .big').forEach(b => b.classList.add('tick'));
+  }
+  if (prev.status === 'live' && next.status === 'completed') {
+    const w = next.winner_team_id === next.team1.id ? next.team1 : next.winner_team_id === next.team2.id ? next.team2 : null;
+    setTimeout(() => CricFX.win({ team: w ? w.name : 'Match tied', sub: next.result_text, color: w && w.color }), 1200);
+  }
+}
+api('/api/matches/' + id).then(draw).catch(e => $('#board').innerHTML = `<div class="empty">${esc(e.message)}</div>`);
+const es = liveStream(id, { match: draw });
+es.onopen = () => $('#liveNote').textContent = '● connected - updates instantly';
+es.onerror = () => $('#liveNote').textContent = 'reconnecting...';
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>My profile - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap" style="max-width:820px">
+  <div class="card">
+    <div class="section-title"><h1 style="margin:0">My profile</h1><span><a class="btn" href="/notifications.html">My alerts</a> <a class="btn" id="statsLink" href="#">View my stats &amp; charts</a></span></div>
+    <p class="muted" id="teamInfo"></p>
+    <form id="f">
+      <div class="form-grid">
+        <div><label>First name *</label><input name="first_name" required maxlength="40"></div>
+        <div><label>Last name *</label><input name="last_name" required maxlength="40"></div>
+        <div class="field" style="margin:0"><label>Email *</label><input name="email" type="email" required maxlength="100"></div>
+        <div><label>Phone</label><input name="phone" maxlength="15"></div>
+        <div><label>Date of birth</label><input name="dob" type="date"></div>
+        <div><label>City</label><input name="city" maxlength="60"></div>
+        <div><label>State</label><input name="state" maxlength="60"></div>
+        <div><label>Role</label><select name="role"><option>Batsman</option><option>Bowler</option><option>All-rounder</option><option>Wicket-keeper</option></select></div>
+        <div><label>Batting style</label><select name="batting_style"><option>Right-hand bat</option><option>Left-hand bat</option></select></div>
+        <div><label>Bowling style</label><select name="bowling_style"><option value="">Does not bowl</option><option>Right-arm fast</option><option>Right-arm fast-medium</option><option>Left-arm fast-medium</option><option>Slow left-arm orthodox</option><option>Right-arm medium</option><option>Left-arm fast</option><option>Left-arm medium</option><option>Right-arm off-break</option><option>Right-arm leg-break</option><option>Left-arm orthodox</option><option>Left-arm chinaman</option></select></div>
+        <div><label>Shirt number</label><input name="jersey_no" type="number" min="0" max="999"></div>
+      </div>
+      <h2 style="margin-top:26px">Password and security</h2>
+      <p class="small muted" style="margin-top:-4px">To change your email or password, type your current password first. Leave the new password empty to keep it.</p>
+      <div class="form-grid">
+        <div class="field"><label for="cur">Current password</label><div class="pw-wrap"><input id="cur" name="current_password" type="password" autocomplete="current-password"></div></div>
+        <div class="field"><label for="npw">New password</label><div class="pw-wrap"><input id="npw" name="password" type="password" autocomplete="new-password" maxlength="128"></div></div>
+        <div class="field"><label for="npw2">New password again</label><div class="pw-wrap"><input id="npw2" name="password2" type="password" autocomplete="new-password" maxlength="128"></div></div>
+      </div>
+      <div class="form-actions"><button class="btn primary">Save changes</button></div>
+    </form>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/auth.js"></script>
+<script>
+['#cur', '#npw', '#npw2'].forEach(s => Auth.eyeToggle($(s)));
+const f = $('#f');
+const strongEnough = Auth.passwordMeter($('#npw'), () => [f.first_name.value, f.last_name.value, ...f.email.value.split('@')[0].split(/[^a-z0-9]+/i)].map(x => x.toLowerCase()).filter(Boolean));
+Auth.emailField(f.email);
+renderHeader('').then(async me => {
+  if (!me.player) { location.href = '/login.html'; return; }
+  const p = await api('/api/me');
+  $('#statsLink').href = '/player.html?id=' + p.id;
+  $('#teamInfo').textContent = p.team_id ? 'You are registered in a team. Your stats update live during matches.' : 'You are not in a team yet - ask the admin to add you.';
+  for (const [k, v] of Object.entries(p)) { const el = $('#f [name="' + k + '"]'); if (el && v != null) el.value = v; }
+});
+$('#f').onsubmit = async e => { e.preventDefault();
+  const d = Object.fromEntries(new FormData(e.target));
+  if (d.password && !strongEnough()) return toast('Please choose a stronger password - see the checklist', 'error');
+  if (d.password && d.password !== d.password2) return toast('The two new passwords do not match', 'error');
+  const btn = e.target.querySelector('.btn.primary'); btn.classList.add('loading');
+  try { await api('/api/me', { method: 'PUT', body: d }); toast('Profile saved'); ['#cur', '#npw', '#npw2'].forEach(s => ($(s).value = '')); $('#npw').dispatchEvent(new Event('input')); }
+  catch (err) { toast(err.message, 'error'); }
+  finally { btn.classList.remove('loading'); } };
+</script>
+</body>
+</html>

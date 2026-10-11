@@ -1,0 +1,20 @@
+{
+  "name": "criclive",
+  "version": "4.0.0",
+  "description": "CricLive - live club cricket scoring: real-time scores with celebrations, OTP sign-in, player stats & charts, downloadable reports, AI player segmentation, match alerts, role-based access",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "dev": "node --no-warnings --watch server.js",
+    "seed": "node --no-warnings src/seed.js",
+    "reset": "node --no-warnings src/seed.js --empty",
+    "test": "node --no-warnings --test tests/criclive.test.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {},
+  "optionalDependencies": {
+    "mysql2": "^3.11.5"
+  }
+}

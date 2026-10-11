@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Teams - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <h1>Teams</h1>
+  <div class="grid grid-3" id="list"></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+renderHeader('teams');
+api('/api/teams').then(ts => $('#list').innerHTML = ts.map(t => `<a class="card match-card" href="/team.html?id=${t.id}">
+  <div style="display:flex;gap:12px;align-items:center">${teamLogo(t)}<div><b>${esc(t.name)}</b><div class="small muted">${esc(t.city || '')} &middot; ${t.players} players</div></div></div></a>`).join('')
+  || '<div class="empty">No teams yet.</div>');
+</script>
+</body>
+</html>

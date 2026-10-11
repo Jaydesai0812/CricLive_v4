@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Admin Panel - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <h1>Admin panel</h1>
+  <div class="tabs" id="tabs">
+    <button data-tab="matches" class="active">Matches &amp; live scoring</button>
+    <button data-tab="teams">Teams</button>
+    <button data-tab="players">Players</button>
+    <button data-tab="tournaments">Tournaments</button>
+    <button data-tab="admins">Staff &amp; roles</button>
+    <button data-tab="audit">Audit log</button>
+    <button data-tab="feedback">Bug reports <span class="badge live" id="fbCount" hidden></span></button>
+  </div>
+
+  <!-- ================= MATCHES ================= -->
+  <section data-pane="matches">
+    <div class="card admin-only">
+      <h2 id="matchFormTitle">Create a match</h2>
+      <form id="matchForm"><input type="hidden" name="id"><div class="form-grid">
+        <div><label>Tournament (optional)</label><select name="tournament_id" class="tournament-select"></select></div>
+        <div><label>Team 1 *</label><select name="team1_id" class="team-select" required></select></div>
+        <div><label>Team 2 *</label><select name="team2_id" class="team-select" required></select></div>
+        <div><label>Overs per side *</label><input name="overs" type="number" min="1" max="50" value="20" required></div>
+        <div><label>Venue</label><input name="venue" maxlength="80"></div>
+        <div><label>Date &amp; time</label><input name="match_date" type="datetime-local"></div>
+      </div><div class="form-actions"><button class="btn primary" id="matchSubmit">Create match</button><button type="button" class="btn" data-reset="matchForm">Clear</button></div></form>
+    </div>
+    <div class="card table-wrap">
+      <h2>All matches</h2>
+      <table><thead><tr><th>#</th><th>Match</th><th>Status</th><th>Date</th><th></th></tr></thead><tbody id="matchList"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ================= TEAMS ================= -->
+  <section data-pane="teams" class="hide">
+    <div class="card">
+      <h2 id="teamFormTitle">Add team</h2>
+      <form id="teamForm"><input type="hidden" name="id"><div class="form-grid">
+        <div><label>Team name *</label><input name="name" required maxlength="60"></div>
+        <div><label>Short name (max 6)</label><input name="short_name" maxlength="6" placeholder="e.g. SUS"></div>
+        <div><label>City</label><input name="city" maxlength="60"></div>
+        <div><label>Colour</label><input name="color" type="color" value="#1f7a4d" style="height:40px;padding:2px"></div>
+      </div><div class="form-actions"><button class="btn primary">Save team</button><button type="button" class="btn" data-reset="teamForm">Clear</button></div></form>
+    </div>
+    <div class="card table-wrap"><table><thead><tr><th>Team</th><th>City</th><th class="num">Players</th><th></th></tr></thead><tbody id="teamList"></tbody></table></div>
+  </section>
+
+  <!-- ================= PLAYERS ================= -->
+  <section data-pane="players" class="hide">
+    <div class="card">
+      <h2 id="playerFormTitle">Add player</h2>
+      <form id="playerForm"><input type="hidden" name="id"><div class="form-grid">
+        <div><label>First name *</label><input name="first_name" required maxlength="40"></div>
+        <div><label>Last name *</label><input name="last_name" required maxlength="40"></div>
+        <div><label>Team</label><select name="team_id" class="team-select-opt"></select></div>
+        <div><label>Role</label><select name="role"><option>Batsman</option><option>Bowler</option><option>All-rounder</option><option>Wicket-keeper</option></select></div>
+        <div><label>Batting style</label><select name="batting_style"><option>Right-hand bat</option><option>Left-hand bat</option></select></div>
+        <div><label>Bowling style</label><select name="bowling_style"><option value="">Does not bowl</option><option>Right-arm fast</option><option>Right-arm fast-medium</option><option>Left-arm fast-medium</option><option>Slow left-arm orthodox</option><option>Right-arm medium</option><option>Left-arm fast</option><option>Left-arm medium</option><option>Right-arm off-break</option><option>Right-arm leg-break</option><option>Left-arm orthodox</option><option>Left-arm chinaman</option></select></div>
+        <div><label>Jersey no.</label><input name="jersey_no" type="number" min="0" max="999"></div>
+        <div><label>Email</label><input name="email" type="email" maxlength="100"></div>
+        <div><label>Phone</label><input name="phone" maxlength="15"></div>
+        <div><label>City</label><input name="city" maxlength="60"></div>
+        <div><label>State</label><input name="state" maxlength="60"></div>
+        <div><label>Date of birth</label><input name="dob" type="date"></div>
+      </div><div class="form-actions"><button class="btn primary">Save player</button><button type="button" class="btn" data-reset="playerForm">Clear</button></div></form>
+    </div>
+    <div class="card table-wrap">
+      <div class="section-title"><h2>Players</h2><select id="playerTeamFilter" class="team-select-opt" style="max-width:240px"></select></div>
+      <table><thead><tr><th>#</th><th>Name</th><th>Team</th><th>Role</th><th>Email</th><th></th></tr></thead><tbody id="playerList"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ================= TOURNAMENTS ================= -->
+  <section data-pane="tournaments" class="hide">
+    <div class="card">
+      <h2 id="tourFormTitle">Add tournament</h2>
+      <form id="tourForm"><input type="hidden" name="id"><div class="form-grid">
+        <div><label>Name *</label><input name="name" required maxlength="80"></div>
+        <div><label>Organizer</label><input name="organizer" maxlength="80"></div>
+        <div><label>Venue</label><input name="venue" maxlength="80"></div>
+        <div><label>Start date</label><input name="start_date" type="date"></div>
+        <div><label>End date</label><input name="end_date" type="date"></div>
+        <div><label>Overs per side *</label><input name="overs" type="number" min="1" max="50" value="20" required></div>
+      </div>
+      <label style="margin-top:12px">Teams in this tournament</label><div class="check-list" id="tourTeams"></div>
+      <div class="form-actions"><button class="btn primary">Save tournament</button><button type="button" class="btn" data-reset="tourForm">Clear</button></div></form>
+    </div>
+    <div class="card table-wrap"><table><thead><tr><th>Tournament</th><th>Dates</th><th class="num">Teams</th><th class="num">Matches</th><th></th></tr></thead><tbody id="tourList"></tbody></table></div>
+  </section>
+
+  <!-- ================= ADMINS ================= -->
+  <section data-pane="admins" class="hide">
+    <div class="card">
+      <h2>Add staff account</h2>
+      <p class="small muted" style="margin-top:-6px"><b>Admin</b> = full control (teams, players, tournaments, fixtures, staff). <b>Scorer</b> = can only score matches ball-by-ball.</p>
+      <form id="adminForm"><div class="form-grid">
+        <div><label>Name *</label><input name="name" required></div>
+        <div><label>Username *</label><input name="username" required pattern="[A-Za-z0-9_.\-]{3,50}"></div>
+        <div class="field" style="margin:0"><label>Email * (sign-in codes go here)</label><input name="email" type="email" required maxlength="100"></div>
+        <div><label>Role</label><select name="role"><option value="scorer">Scorer</option><option value="admin">Admin</option></select></div>
+      </div>
+      <div class="field" style="margin-top:12px;max-width:420px"><label for="staffPw">Password *</label><div class="pw-wrap"><input id="staffPw" name="password" type="password" required maxlength="128" autocomplete="new-password"></div></div>
+      <div class="form-actions"><button class="btn primary">Add staff</button></div></form>
+    </div>
+    <div class="card table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Created</th><th></th></tr></thead><tbody id="adminList"></tbody></table></div>
+  </section>
+
+  <!-- ================= AUDIT ================= -->
+  <section data-pane="audit" class="hide">
+    <div class="card table-wrap"><h2>Audit log</h2><p class="small muted" style="margin-top:-6px">Every login and change made by staff (last 200).</p>
+      <table><thead><tr><th>When</th><th>User</th><th>Role</th><th>Action</th><th>Details</th><th>IP</th></tr></thead><tbody id="auditList"></tbody></table></div>
+  </section>
+
+  <!-- ================= BUG REPORTS / CONTACT ================= -->
+  <section data-pane="feedback" class="hide">
+    <div class="card"><div class="section-title" style="margin-top:0"><h2 style="margin:0">Bug reports and messages</h2>
+      <select id="fbFilter" style="max-width:200px"><option value="">All</option><option value="new">New</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option></select></div>
+      <p class="small muted" style="margin-top:0">Sent from the Contact us page. Reply by email, then mark it resolved.</p>
+      <div id="fbList"></div></div>
+  </section>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/auth.js"></script>
+<script>
+let TEAMS = [], TOURS = [], PLAYERS = [];
+const formData = f => Object.fromEntries(new FormData(f));
+const safe = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, 'error'); } };
+
+let ROLE = 'admin';
+renderHeader('admin').then(me => {
+  if (!me.admin) { location.href = '/login.html'; return; }
+  ROLE = me.admin.role;
+  if (ROLE !== 'admin') {
+    $$('#tabs button').forEach(b => { if (b.dataset.tab !== 'matches') b.remove(); });
+    $$('.admin-only').forEach(x => x.remove());
+    $('h1').textContent = 'Scorer panel';
+    loadMatches();
+  } else loadAll();
+});
+
+$$('#tabs button').forEach(b => b.onclick = () => {
+  $$('#tabs button').forEach(x => x.classList.toggle('active', x === b));
+  $$('[data-pane]').forEach(p => p.classList.toggle('hide', p.dataset.pane !== b.dataset.tab));
+  history.replaceState(null, '', '#' + b.dataset.tab);
+});
+const openHashTab = () => { if (location.hash) { const b = $(`#tabs button[data-tab="${location.hash.slice(1)}"]`); if (b) b.click(); } };
+openHashTab(); addEventListener('hashchange', openHashTab);
+$$('[data-reset]').forEach(b => b.onclick = () => resetForm(b.dataset.reset));
+function resetForm(id) {
+  const f = $('#' + id); f.reset(); if (f.elements.id) f.elements.id.value = '';
+  const t = { teamForm: ['#teamFormTitle', 'Add team'], playerForm: ['#playerFormTitle', 'Add player'], tourForm: ['#tourFormTitle', 'Add tournament'], matchForm: ['#matchFormTitle', 'Create a match'] }[id];
+  if (t) $(t[0]).textContent = t[1];
+  if (id === 'matchForm') $('#matchSubmit').textContent = 'Create match';
+}
+
+async function loadAll() { await Promise.all([loadTeams(), loadTours()]); await Promise.all([loadMatches(), loadPlayers(), loadAdmins(), loadAudit(), loadFeedback()]); }
+
+// ---------------- bug reports / contact messages
+let FB = [];
+async function loadFeedback() {
+  FB = await api('/api/admin/feedback');
+  const n = FB.filter(f => f.status === 'new').length;
+  $('#fbCount').hidden = !n; $('#fbCount').textContent = n;
+  drawFeedback();
+}
+function drawFeedback() {
+  const want = $('#fbFilter').value;
+  const icon = { bug: '&#128027; Bug', question: '&#10067; Question', idea: '&#128161; Idea' };
+  const list = FB.filter(f => !want || f.status === want);
+  $('#fbList').innerHTML = list.map(f => `<div class="fb-item ${f.status}">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${icon[f.kind] || esc(f.kind)} <span class="muted small">CL-${String(f.id).padStart(4, '0')}</span></b><span class="small muted">${fmtDate(f.created_at)}</span></div>
+    <div class="small">${esc(f.name)} &lt;<a href="mailto:${esc(f.email)}?subject=${encodeURIComponent('CricLive: your message CL-' + String(f.id).padStart(4, '0'))}">${esc(f.email)}</a>&gt;${f.page ? ` on <b>${esc(f.page)}</b>` : ''}</div>
+    <div class="msg">${esc(f.message)}</div>${f.device ? `<div class="small muted">${esc(f.device)}</div>` : ''}
+    <div class="admin-row-actions" style="justify-content:flex-start;margin-top:8px">
+      ${['new', 'in_progress', 'resolved'].map(s => `<button class="btn sm ${f.status === s ? 'primary' : ''}" data-fb="${f.id}" data-st="${s}">${{ new: 'New', in_progress: 'In progress', resolved: 'Resolved' }[s]}</button>`).join('')}
+      <button class="btn sm danger" data-fbdel="${f.id}">Delete</button></div></div>`).join('') || '<div class="empty">No messages here.</div>';
+  $$('[data-fb]').forEach(b => b.onclick = safe(async () => { await api('/api/admin/feedback/' + b.dataset.fb, { method: 'PUT', body: { status: b.dataset.st } }); toast('Marked ' + b.textContent.toLowerCase()); loadFeedback(); }));
+  $$('[data-fbdel]').forEach(b => b.onclick = safe(async () => { if (!confirm('Delete this message?')) return; await api('/api/admin/feedback/' + b.dataset.fbdel, { method: 'DELETE' }); loadFeedback(); }));
+}
+$('#fbFilter').onchange = drawFeedback;
+async function loadAudit() {
+  const rows = await api('/api/admin/audit');
+  $('#auditList').innerHTML = rows.map(a => `<tr><td class="small">${fmtDate(a.created_at)}</td><td>${esc(a.actor)}</td><td>${esc(a.role || '')}</td><td><code>${esc(a.action)}</code></td><td class="small">${esc(a.details || '')}</td><td class="small muted">${esc(a.ip || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Nothing yet</td></tr>';
+}
+
+// ---------------- teams
+async function loadTeams() {
+  TEAMS = await api('/api/teams');
+  const opts = TEAMS.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  $$('.team-select').forEach(s => s.innerHTML = '<option value="">-- choose --</option>' + opts);
+  $('#playerForm [name=team_id]').innerHTML = '<option value="">No team</option>' + opts;
+  const keep = $('#playerTeamFilter').value;
+  $('#playerTeamFilter').innerHTML = '<option value="">All teams</option>' + opts; $('#playerTeamFilter').value = keep;
+  $('#tourTeams').innerHTML = TEAMS.map(t => `<label><input type="checkbox" name="team_ids" value="${t.id}">${teamDot(t)}${esc(t.name)}</label>`).join('') || '<span class="muted">Create teams first</span>';
+  $('#teamList').innerHTML = TEAMS.map(t => `<tr><td>${teamDot(t)}<a href="/team.html?id=${t.id}"><b>${esc(t.name)}</b></a> <span class="muted">${esc(t.short_name)}</span></td>
+    <td>${esc(t.city || '')}</td><td class="num">${t.players}</td>
+    <td><div class="admin-row-actions"><button class="btn sm" data-edit-team="${t.id}">Edit</button><button class="btn sm danger" data-del-team="${t.id}">Delete</button></div></td></tr>`).join('')
+    || '<tr><td colspan="4" class="muted">No teams yet</td></tr>';
+  $$('[data-edit-team]').forEach(b => b.onclick = () => {
+    const t = TEAMS.find(x => x.id == b.dataset.editTeam), f = $('#teamForm');
+    for (const k of ['id', 'name', 'short_name', 'city', 'color']) f.elements[k].value = t[k] || '';
+    $('#teamFormTitle').textContent = 'Edit team: ' + t.name; f.scrollIntoView({ behavior: 'smooth' });
+  });
+  $$('[data-del-team]').forEach(b => b.onclick = safe(async () => {
+    if (!confirm('Delete this team? Players will be left without a team.')) return;
+    await api('/api/admin/teams/' + b.dataset.delTeam, { method: 'DELETE' }); toast('Team deleted'); loadAll();
+  }));
+}
+$('#teamForm').onsubmit = safe(async e => {
+  e.preventDefault(); const d = formData(e.target);
+  if (d.id) await api('/api/admin/teams/' + d.id, { method: 'PUT', body: d }); else await api('/api/admin/teams', { method: 'POST', body: d });
+  toast('Team saved'); resetForm('teamForm'); loadAll();
+});
+
+// ---------------- players
+async function loadPlayers() {
+  PLAYERS = await api('/api/admin/players');
+  const tf = $('#playerTeamFilter').value;
+  const list = tf ? PLAYERS.filter(p => String(p.team_id) === tf) : PLAYERS;
+  $('#playerList').innerHTML = list.map(p => `<tr><td class="muted">${p.id}</td><td><a href="/player.html?id=${p.id}"><b>${esc(p.first_name)} ${esc(p.last_name)}</b></a></td>
+    <td>${esc(p.team_name || '-')}</td><td>${esc(p.role)}</td><td class="small">${esc(p.email || '')}</td>
+    <td><div class="admin-row-actions"><button class="btn sm" data-edit-player="${p.id}">Edit</button><button class="btn sm danger" data-del-player="${p.id}">Delete</button></div></td></tr>`).join('')
+    || '<tr><td colspan="6" class="muted">No players</td></tr>';
+  $$('[data-edit-player]').forEach(b => b.onclick = () => {
+    const p = PLAYERS.find(x => x.id == b.dataset.editPlayer), f = $('#playerForm');
+    for (const el of f.elements) if (el.name && p[el.name] !== undefined) el.value = p[el.name] == null ? '' : (el.name === 'dob' ? String(p.dob).slice(0, 10) : p[el.name]);
+    $('#playerFormTitle').textContent = 'Edit player: ' + p.first_name + ' ' + p.last_name; f.scrollIntoView({ behavior: 'smooth' });
+  });
+  $$('[data-del-player]').forEach(b => b.onclick = safe(async () => {
+    if (!confirm('Delete this player?')) return;
+    await api('/api/admin/players/' + b.dataset.delPlayer, { method: 'DELETE' }); toast('Player deleted'); loadAll();
+  }));
+}
+$('#playerTeamFilter').onchange = loadPlayers;
+$('#playerForm').onsubmit = safe(async e => {
+  e.preventDefault(); const d = formData(e.target);
+  if (d.id) await api('/api/admin/players/' + d.id, { method: 'PUT', body: d }); else await api('/api/admin/players', { method: 'POST', body: d });
+  toast('Player saved'); resetForm('playerForm'); loadAll();
+});
+
+// ---------------- tournaments
+async function loadTours() {
+  TOURS = await api('/api/tournaments');
+  $$('.tournament-select').forEach(s => s.innerHTML = '<option value="">Friendly (no tournament)</option>' + TOURS.map(t => `<option value="${t.id}" data-overs="${t.overs}">${esc(t.name)}</option>`).join(''));
+  $('#tourList').innerHTML = TOURS.map(t => `<tr><td><a href="/tournament.html?id=${t.id}"><b>${esc(t.name)}</b></a><div class="dismissal">${esc(t.venue || '')} &middot; ${t.overs} overs</div></td>
+    <td class="small">${fmtDate(t.start_date, false)} - ${fmtDate(t.end_date, false)}</td><td class="num">${t.teams}</td><td class="num">${t.matches}</td>
+    <td><div class="admin-row-actions"><button class="btn sm" data-fix="${t.id}" title="Create a match for every pair of teams">Generate fixtures</button>
+      <button class="btn sm" data-edit-tour="${t.id}">Edit</button><button class="btn sm danger" data-del-tour="${t.id}">Delete</button></div></td></tr>`).join('')
+    || '<tr><td colspan="5" class="muted">No tournaments</td></tr>';
+  $$('[data-fix]').forEach(b => b.onclick = safe(async () => {
+    const r = await api(`/api/admin/tournaments/${b.dataset.fix}/fixtures`, { method: 'POST' }); toast(r.created + ' match(es) created'); loadAll();
+  }));
+  $$('[data-edit-tour]').forEach(b => b.onclick = safe(async () => {
+    const t = TOURS.find(x => x.id == b.dataset.editTour), f = $('#tourForm');
+    for (const k of ['id', 'name', 'organizer', 'venue', 'overs']) f.elements[k].value = t[k] ?? '';
+    f.elements.start_date.value = t.start_date ? String(t.start_date).slice(0, 10) : '';
+    f.elements.end_date.value = t.end_date ? String(t.end_date).slice(0, 10) : '';
+    const ids = await api(`/api/admin/tournaments/${t.id}/teams`);
+    $$('#tourTeams input').forEach(c => c.checked = ids.includes(Number(c.value)));
+    $('#tourFormTitle').textContent = 'Edit tournament: ' + t.name; f.scrollIntoView({ behavior: 'smooth' });
+  }));
+  $$('[data-del-tour]').forEach(b => b.onclick = safe(async () => {
+    if (!confirm('Delete this tournament? Its matches will become friendlies.')) return;
+    await api('/api/admin/tournaments/' + b.dataset.delTour, { method: 'DELETE' }); toast('Tournament deleted'); loadAll();
+  }));
+}
+$('#tourForm').onsubmit = safe(async e => {
+  e.preventDefault(); const d = formData(e.target);
+  d.team_ids = $$('#tourTeams input:checked').map(c => Number(c.value));
+  if (d.id) await api('/api/admin/tournaments/' + d.id, { method: 'PUT', body: d }); else await api('/api/admin/tournaments', { method: 'POST', body: d });
+  toast('Tournament saved'); resetForm('tourForm'); loadAll();
+});
+
+// ---------------- matches
+$('#matchForm [name=tournament_id]').onchange = e => { const o = e.target.selectedOptions[0]; if (o && o.dataset.overs) $('#matchForm [name=overs]').value = o.dataset.overs; };
+async function loadMatches() {
+  const ms = await api('/api/matches?limit=300');
+  window.MATCHES = ms;
+  const order = { live: 0, scheduled: 1, completed: 2, abandoned: 3 };
+  ms.sort((a, b) => order[a.status] - order[b.status] || String(a.match_date).localeCompare(String(b.match_date)));
+  $('#matchList').innerHTML = ms.map(m => `<tr><td class="muted">${m.id}</td>
+    <td><b>${esc(m.team1.name)}</b> vs <b>${esc(m.team2.name)}</b><div class="dismissal">${esc(m.tournament_name || 'Friendly')} &middot; ${m.overs} ov &middot; ${esc(m.status_text)}</div></td>
+    <td>${statusBadge(m.status)}</td><td class="small">${fmtDate(m.match_date)}</td>
+    <td><div class="admin-row-actions">
+      ${m.status === 'live' || m.status === 'scheduled' ? `<a class="btn sm primary" href="/admin/score.html?id=${m.id}">${m.status === 'live' ? 'Continue scoring' : 'Start scoring'}</a>` : `<a class="btn sm" href="/admin/score.html?id=${m.id}">Open</a>`}
+      <a class="btn sm" href="/match.html?id=${m.id}" target="_blank">View</a>
+      ${ROLE === 'admin' ? `<button class="btn sm" data-edit-match="${m.id}">Edit</button>
+      ${m.status === 'live' || m.status === 'scheduled' ? `<button class="btn sm" data-abandon="${m.id}" title="Rain / bad light: no result, 1 point each">Abandon</button>` : ''}
+      <button class="btn sm danger" data-del-match="${m.id}">Delete</button>` : ''}</div></td></tr>`).join('')
+    || '<tr><td colspan="5" class="muted">No matches yet</td></tr>';
+  $$('[data-edit-match]').forEach(b => b.onclick = () => {
+    const m = MATCHES.find(x => x.id == b.dataset.editMatch), f = $('#matchForm');
+    f.elements.id.value = m.id; f.elements.tournament_id.value = m.tournament_id || ''; f.elements.team1_id.value = m.team1.id; f.elements.team2_id.value = m.team2.id;
+    f.elements.overs.value = m.overs; f.elements.venue.value = m.venue || ''; f.elements.match_date.value = m.match_date ? String(m.match_date).slice(0, 16).replace(' ', 'T') : '';
+    $('#matchFormTitle').textContent = `Edit / reschedule match #${m.id}`; $('#matchSubmit').textContent = 'Save changes';
+    f.scrollIntoView({ behavior: 'smooth' });
+  });
+  $$('[data-abandon]').forEach(b => b.onclick = safe(async () => {
+    const reason = prompt('Abandon this match? Reason (shown in the result):', 'rain');
+    if (reason === null) return;
+    await api(`/api/admin/matches/${b.dataset.abandon}/abandon`, { method: 'POST', body: { reason } }); toast('Match abandoned - no result'); loadMatches();
+  }));
+  $$('[data-del-match]').forEach(b => b.onclick = safe(async () => {
+    if (!confirm('Delete this match and all its scores? Player stats will be recalculated.')) return;
+    await api('/api/admin/matches/' + b.dataset.delMatch, { method: 'DELETE' }); toast('Match deleted'); loadAll();
+  }));
+}
+$('#matchForm').onsubmit = safe(async e => {
+  e.preventDefault();
+  const d = formData(e.target);
+  if (d.id) { await api('/api/admin/matches/' + d.id, { method: 'PUT', body: d }); toast('Match updated - followers notified'); resetForm('matchForm'); loadMatches(); return; }
+  const r = await api('/api/admin/matches', { method: 'POST', body: d });
+  toast('Match created'); resetForm('matchForm'); loadMatches();
+  if (confirm('Match created. Open the scoring console now?')) location.href = '/admin/score.html?id=' + r.id;
+});
+
+// ---------------- admins
+async function loadAdmins() {
+  const list = await api('/api/admin/admins');
+  $('#adminList').innerHTML = list.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(a.username)}</td><td class="small">${a.email ? esc(a.email) : '<span class="badge">none</span>'}</td><td><span class="badge">${esc(a.role)}</span></td><td class="small">${fmtDate(a.created_at)}</td>
+    <td><div class="admin-row-actions"><button class="btn sm" data-email-admin="${a.id}" data-cur="${esc(a.email || '')}">Set email</button><button class="btn sm danger" data-del-admin="${a.id}">Delete</button></div></td></tr>`).join('');
+  $$('[data-email-admin]').forEach(b => b.onclick = safe(async () => {
+    const email = prompt('Email address for sign-in codes:', b.dataset.cur || '');
+    if (email == null) return;
+    await api('/api/admin/admins/' + b.dataset.emailAdmin, { method: 'PUT', body: { email } }); toast('Email saved'); loadAdmins();
+  }));
+  $$('[data-del-admin]').forEach(b => b.onclick = safe(async () => {
+    if (!confirm('Delete this staff account?')) return;
+    await api('/api/admin/admins/' + b.dataset.delAdmin, { method: 'DELETE' }); toast('Admin deleted'); loadAdmins();
+  }));
+}
+Auth.eyeToggle($('#staffPw'));
+const staffStrong = Auth.passwordMeter($('#staffPw'), () => { const f = $('#adminForm'); return [f.username.value, f.name.value, ...f.email.value.split('@')[0].split(/[^a-z0-9]+/i)].map(x => x.toLowerCase()).filter(Boolean); });
+$('#adminForm').onsubmit = safe(async e => {
+  if (!staffStrong()) { e.preventDefault(); return toast('Please choose a stronger password - see the checklist', 'error'); }
+  e.preventDefault(); await api('/api/admin/admins', { method: 'POST', body: formData(e.target) }); toast('Staff account added'); e.target.reset(); loadAdmins(); loadAudit();
+});
+</script>
+</body>
+</html>

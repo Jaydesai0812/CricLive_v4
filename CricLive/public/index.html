@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>CricLive - Live club cricket scores</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<section class="wrap">
+  <div class="hero">
+    <div class="stripes"></div>
+    <svg class="pitch-art" viewBox="0 0 420 300" aria-hidden="true">
+      <defs><linearGradient id="hp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8c58f"/><stop offset="1" stop-color="#b79d5e"/></linearGradient></defs>
+      <path d="M150 300 L270 300 L240 40 L180 40 Z" fill="url(#hp)" opacity=".9"/>
+      <line x1="158" y1="262" x2="262" y2="262" stroke="#fff" stroke-width="3" opacity=".85"/><line x1="182" y1="70" x2="238" y2="70" stroke="#fff" stroke-width="2" opacity=".8"/>
+      <g fill="#f3e2bd" stroke="#8a5a2b" stroke-width="1.5"><rect x="198" y="34" width="5" height="38" rx="2"/><rect x="207" y="34" width="5" height="38" rx="2"/><rect x="216" y="34" width="5" height="38" rx="2"/></g>
+      <path d="M60 250 Q 150 60 214 52" fill="none" stroke="#ffd34d" stroke-width="2.5" stroke-dasharray="6 7" opacity=".85"><animate attributeName="stroke-dashoffset" from="130" to="0" dur="2.4s" repeatCount="indefinite"/></path>
+      <circle r="9" fill="#c8102e"><animateMotion dur="2.4s" repeatCount="indefinite" path="M60 250 Q 150 60 214 52" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".4 0 .6 1"/></circle>
+    </svg>
+    <div style="position:relative;max-width:640px">
+      <span class="badge live" id="heroLive" hidden>Live now</span>
+      <h1>Every ball. Live.</h1>
+      <p>Follow club matches as they happen: ball-by-ball scores, scorecards, tables and player stats, updated the second the scorer taps a button.</p>
+      <div class="cta">
+        <a class="btn gold" href="#live">Watch live matches</a>
+        <a class="btn ghost" href="/tournaments.html">Tables and fixtures</a>
+        <a class="btn ghost" href="/notifications.html">Match alerts</a>
+      </div>
+    </div>
+  </div>
+</section>
+<main class="wrap layout" style="padding-top:18px">
+  <div>
+    <div class="section-title"><h2 id="live">Live now</h2><span class="live-note" id="liveNote">&#9679; Scores update automatically</span></div>
+    <div class="grid grid-2" id="liveList" data-live></div>
+    <div class="section-title"><h2>Upcoming matches</h2></div>
+    <div class="grid grid-2" id="upcoming"></div>
+    <div class="section-title"><h2>Recent results</h2></div>
+    <div class="grid grid-2" id="results"></div>
+  </div>
+  <aside>
+    <div class="card"><h3>Most runs</h3><div id="topRuns"></div></div>
+    <div class="card"><h3>Most wickets</h3><div id="topWkts"></div></div>
+    <div class="card"><h3>Found a problem?</h3><p class="small muted" style="margin:0 0 10px">Tell us what went wrong and we'll fix it.</p><a class="btn sm" href="/contact.html?type=bug">Report a bug</a></div>
+  </aside>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/fx.js"></script>
+<script src="/js/auth.js"></script>
+<script>
+$('#liveList').innerHTML = loader('Loading matches');
+const fill = (id, list, empty) => { $('#' + id).innerHTML = list.length ? list.map(matchCard).join('') : `<div class="empty">${empty}</div>`; };
+function leaders(l) {
+  const row = (r, v) => `<div class="leader-row"><span><a href="/player.html?id=${r.id}">${esc(r.name)}</a> <span class="muted small">${esc(r.team || '')}</span></span><b class="num">${v}</b></div>`;
+  $('#topRuns').innerHTML = l.runs.map(r => row(r, r.runs)).join('') || '<div class="muted">No data yet</div>';
+  $('#topWkts').innerHTML = l.wickets.map(r => row(r, r.wickets)).join('') || '<div class="muted">No data yet</div>';
+}
+const lastSeq = {};
+async function load() {
+  const d = await api('/api/home');
+  fill('liveList', d.live, 'No match is live right now. Upcoming fixtures are below.');
+  fill('upcoming', d.upcoming, 'No upcoming matches.');
+  fill('results', d.results, 'No results yet.');
+  $('#heroLive').hidden = !d.live.length;
+  leaders(d.leaders);
+}
+let timer;
+function startPage() {
+  load();
+  liveStream(null, {
+    summary(m) {
+      const el = document.querySelector(`[data-match="${m.id}"]`);
+      const inLive = el && el.parentElement.id === 'liveList';
+      if (el && ((m.status === 'live') === inLive)) {          // same section -> replace card in place
+        el.outerHTML = matchCard(m);
+        const card = document.querySelector(`[data-match="${m.id}"]`);
+        card.classList.add('flash', 'in'); card.dataset.rv = 1;
+        // a small celebration on the card for 4s, 6s and wickets
+        if (m.last && lastSeq[m.id] !== m.last.seq) { lastSeq[m.id] = m.last.seq; CricFX.mini(card, m.last.kind); }
+      } else { clearTimeout(timer); timer = setTimeout(load, 300); }
+      if (m.status === 'completed' && m.winner_team_id && el && inLive) {
+        const w = m.team1.id === m.winner_team_id ? m.team1 : m.team2;
+        CricFX.win({ team: w.name, sub: m.status_text, color: w.color, small: true });
+      }
+    },
+    stats() { clearTimeout(timer); timer = setTimeout(() => api('/api/leaders').then(l => leaders({ runs: l.runs.slice(0, 5), wickets: l.wickets.slice(0, 5) })), 500); },
+  });
+}
+
+// ---------------- first visit in this browser session: cricket intro, then sign in
+const seen = k => { try { return sessionStorage.getItem(k); } catch { return '1'; } };
+const mark = k => { try { sessionStorage.setItem(k, '1'); } catch { /* */ } };
+function intro() {
+  return new Promise(resolve => {
+    if (seen('cl_intro') || reducedMotion()) return resolve();
+    mark('cl_intro');
+    const word = 'CricLive'.split('').map((c, i) => `<span style="--i:${i}" class="${i >= 4 ? 'g' : ''}">${c}</span>`).join('');
+    const el = document.createElement('div');
+    el.className = 'intro';
+    el.innerHTML = `<div style="text-align:center">
+      <svg class="scene" viewBox="-200 -150 400 260" aria-hidden="true">
+        <path class="pitch" d="M-70 100 L70 100 L40 -40 L-40 -40 Z"/>
+        <line class="crease-line" x1="-62" y1="82" x2="62" y2="82"/><line class="crease-line" x1="-44" y1="-22" x2="44" y2="-22"/>
+        <rect class="stump s1" x="-14" y="-78" width="6" height="58" rx="3"/><rect class="stump s2" x="-3" y="-78" width="6" height="58" rx="3"/><rect class="stump s3" x="8" y="-78" width="6" height="58" rx="3"/>
+        <rect class="bail" x="-15" y="-83" width="14" height="5" rx="2.5"/><rect class="bail r" x="1" y="-83" width="14" height="5" rx="2.5"/>
+        <circle class="shock" cx="0" cy="-60" r="14"/>
+        <g class="iball" transform="translate(0,0)"><g transform="translate(0,-58)"><circle r="10"/><path d="M-4 -7 Q0 0 -4 7 M4 -7 Q0 0 4 7" stroke="#fff" stroke-width="1.2" fill="none" stroke-dasharray="2 2"/></g></g>
+      </svg>
+      <div class="brand"><div class="w" aria-label="CricLive">${word}</div><div class="tag">Live club cricket, ball by ball</div></div></div>
+      <button class="skip">Skip intro</button>`;
+    document.body.appendChild(el);
+    const end = () => { el.classList.add('done'); setTimeout(() => { el.remove(); resolve(); }, 550); };
+    const t = setTimeout(end, 3400);
+    el.querySelector('.skip').onclick = () => { clearTimeout(t); end(); };
+  });
+}
+function gate() {
+  if (ME.admin || ME.player || seen('cl_guest')) return;
+  const g = document.createElement('div');
+  g.className = 'gate'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-modal', 'true'); g.setAttribute('aria-label', 'Sign in to CricLive');
+  g.innerHTML = `<div class="gate-card">
+    <div class="gate-art"><div><a class="logo" href="/">${LOGO}</a><h2 style="margin-top:22px">Sign in to follow every ball</h2>
+      <p>Your own stats page, alerts for your teams, and match reports you can download.</p>
+      <ul class="points"><li>One-time code by email - no stolen-password logins</li><li>Wicket, fifty and result alerts</li><li>Charts and tips to improve your game</li></ul></div>${Auth.artScene()}</div>
+    <div class="gate-panel"><div class="seg" role="tablist"><button data-t="signin" class="on">Sign in</button><button data-t="register">Create account</button></div>
+      <div id="gateBody"></div>
+      <div class="guest"><button class="linkish" id="guestBtn">Just watch the scores as a guest</button></div></div></div>`;
+  document.body.appendChild(g);
+  document.body.classList.add('menu-open');
+  const show = t => {
+    g.querySelectorAll('[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    const host = $('#gateBody');
+    const opts = { onSwitch: show, registerLink: false, signInLink: false, next: location.pathname };
+    if (t === 'signin') Auth.mountSignIn(host, opts); else Auth.mountRegister(host, { ...opts, next: '/me.html' });
+  };
+  g.querySelectorAll('[data-t]').forEach(b => (b.onclick = () => show(b.dataset.t)));
+  const close = () => { mark('cl_guest'); g.classList.add('closing'); document.body.classList.remove('menu-open'); setTimeout(() => g.remove(), 300); };
+  $('#guestBtn').onclick = close;
+  g.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  show('signin');
+}
+(async () => {
+  const introDone = intro();
+  await renderHeader('home');
+  startPage();
+  await introDone;
+  gate();
+})();
+</script>
+</body>
+</html>

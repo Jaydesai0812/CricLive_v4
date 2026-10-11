@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Player - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <div id="page"><div class="card"><div class="loader"><span class="spin-ball"></span>Loading player…</div></div></div>
+  <div class="section-title"><h2>Performance charts</h2><span class="live-note">&#9679; Updates live after every ball</span></div>
+  <div class="chart-grid" id="charts"></div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/charts.js"></script>
+<script>
+renderHeader('players');
+const id = Number(qs('id'));
+let P = null;
+const tile = (k, v, key) => `<div class="tile" data-k="${key}"><div class="v">${esc(v)}</div><div class="k">${k}</div></div>`;
+
+function drawProfile(p, seg) {
+  const b = p.batting, w = p.bowling, f = p.fielding;
+  document.title = p.name + ' - CricLive';
+  $('#page').innerHTML = `
+  <div class="card"><div class="profile-head">
+    <div class="avatar" style="background:${esc(p.team ? p.team.color : '#555')}">${initials(p.name)}</div>
+    <div style="flex:1"><h1 style="margin:0">${esc(p.name)} ${p.jersey_no != null ? `<span class="muted">#${p.jersey_no}</span>` : ''}</h1>
+      <div class="muted">${esc(p.role)}${p.team ? ` &middot; <a href="/team.html?id=${p.team.id}">${esc(p.team.name)}</a>` : ''}${p.city ? ' &middot; ' + esc(p.city) : ''}</div>
+      <div class="small muted">${esc(p.batting_style || '')}${p.bowling_style ? ' &middot; ' + esc(p.bowling_style) : ''}</div>
+      ${seg ? `<div style="margin-top:6px"><span class="seg-badge" title="Found by K-Means clustering on this player's stats">&#9733; AI player type: ${esc(seg.name)}</span></div>` : ''}
+    </div></div>
+    ${seg ? `<div class="hint" style="margin-top:12px"><b>${esc(seg.name)}:</b> ${esc(seg.description)} <b>Coaching tip:</b> ${esc(seg.recommendation)} <a href="/analytics.html">How is this calculated?</a></div>` : ''}
+    <div class="downloads" style="margin-top:14px"><span class="small muted">Download to study your game:</span>
+      <a class="btn sm primary" href="/api/players/${p.id}/download/report.html" download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>Report, charts and improvement plan</a>
+      <a class="btn sm" href="/api/players/${p.id}/download/matches.csv" download>Every match (CSV for Excel)</a></div>
+  </div>
+  <div class="card"><h2>Batting</h2><div class="tiles">
+    ${tile('Matches', b.matches, 'm')}${tile('Innings', b.innings, 'bi')}${tile('Runs', b.runs, 'r')}${tile('Balls', b.balls, 'bf')}
+    ${tile('Highest', b.highest, 'hs')}${tile('Average', b.average, 'avg')}${tile('Strike rate', b.strike_rate, 'sr')}${tile('Not outs', b.not_outs, 'no')}
+    ${tile('4s', b.fours, '4')}${tile('6s', b.sixes, '6')}${tile('50s', b.fifties, '50')}${tile('100s', b.hundreds, '100')}</div></div>
+  <div class="card"><h2>Bowling</h2><div class="tiles">
+    ${tile('Innings', w.innings, 'wi')}${tile('Overs', w.overs, 'o')}${tile('Wickets', w.wickets, 'w')}${tile('Runs', w.runs, 'rc')}
+    ${tile('Best', w.best, 'bb')}${tile('Average', w.average, 'ba')}${tile('Economy', w.economy, 'ec')}${tile('Maidens', w.maidens, 'md')}</div></div>
+  <div class="card"><h2>Fielding</h2><div class="tiles">${tile('Catches', f.catches, 'c')}${tile('Stumpings', f.stumpings, 'st')}${tile('Run outs', f.run_outs, 'ro')}</div></div>`;
+  if (P) $$('.tile').forEach(t => { const old = P._tiles && P._tiles[t.dataset.k]; if (old !== undefined && old !== $('.v', t).textContent) t.classList.add('flash'); });
+  p._tiles = Object.fromEntries($$('.tile').map(t => [t.dataset.k, $('.v', t).textContent]));
+  P = p;
+}
+
+function drawCharts(c) {
+  const hasBat = c.innings.length > 0, hasBowl = c.bowling.length > 0;
+  const html = [
+    chartCard('cInnings', true), chartCard('cCareer'), chartCard('cShots'), chartCard('cOut'),
+    hasBowl ? chartCard('cWkts') : '', hasBowl ? chartCard('cEcon') : '', hasBowl ? chartCard('cWType') : '',
+  ].join('');
+  if ($('#charts').dataset.layout !== html) { $('#charts').dataset.layout = html; $('#charts').innerHTML = html; } // build once: charts animate in once
+  Charts.bar($('#cInnings'), {
+    title: 'Runs in each innings', subtitle: 'Oldest to newest. Lighter bars = not out. Click a bar to open the match.',
+    data: c.innings.map(i => ({ label: String(i.n), tip: i.label, value: i.runs, muted: i.not_out, extra: `${i.runs}${i.not_out ? '*' : ''} off ${i.balls} balls`, href: `/match.html?id=${i.match_id}` })),
+    valueName: 'Runs', labelName: 'Innings', valueLabels: true, empty: 'Has not batted yet', height: 230,
+  });
+  Charts.line($('#cCareer'), {
+    title: 'Career runs progression', subtitle: 'Total runs after each innings', area: true,
+    labels: c.innings.map(i => String(i.n)), tips: c.innings.map(i => i.label),
+    series: [{ name: 'Career runs', values: c.innings.map(i => i.cumulative) }], labelName: 'Innings', empty: 'Has not batted yet',
+  });
+  Charts.bar($('#cShots'), {
+    title: 'Scoring shots', subtitle: 'Balls faced by result', data: c.scoring.filter(() => hasBat), valueName: 'Balls', labelName: 'Shot', valueLabels: true, empty: 'Has not batted yet',
+  });
+  Charts.bar($('#cOut'), {
+    title: 'How out', horizontal: true, data: c.dismissals, valueName: 'Times', labelName: 'Dismissal', slot: 1, empty: 'Never dismissed',
+  });
+  if (hasBowl) {
+    Charts.bar($('#cWkts'), {
+      title: 'Wickets per match', data: c.bowling.map((b, i) => ({ label: String(i + 1), tip: b.label, value: b.wickets, extra: `${b.wickets}/${b.runs} in ${b.overs} overs`, href: `/match.html?id=${b.match_id}` })),
+      valueName: 'Wickets', labelName: 'Match', slot: 2, valueLabels: true, empty: 'No wickets yet',
+    });
+    Charts.line($('#cEcon'), {
+      title: 'Economy rate per match', subtitle: 'Runs conceded per over (lower is better)',
+      labels: c.bowling.map((b, i) => String(i + 1)), tips: c.bowling.map(b => `${b.label}: ${b.wickets}/${b.runs} (${b.overs} ov)`),
+      series: [{ name: 'Economy', values: c.bowling.map(b => b.economy), slot: 2 }], labelName: 'Match',
+    });
+    Charts.bar($('#cWType'), { title: 'Wickets by type', horizontal: true, data: c.wicket_types, valueName: 'Wickets', labelName: 'Type', slot: 2, empty: 'No wickets yet' });
+  }
+}
+
+async function load() {
+  try {
+    const [p, c] = await Promise.all([api('/api/players/' + id), api('/api/players/' + id + '/charts')]);
+    drawProfile(p, c.segment);
+    drawCharts(c);
+  } catch (e) { $('#page').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+load();
+let t; liveStream(null, { stats(d) { if (d.players.includes(id)) { clearTimeout(t); t = setTimeout(load, 300); } } });
+</script>
+</body>
+</html>

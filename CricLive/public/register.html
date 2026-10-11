@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Create your player account - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth-page">
+  <section class="auth-art">
+    <div><h1>Your runs. Your wickets. Your page.</h1><p>Create a player account. Once your club adds you to a team, every ball you face or bowl updates your stats, charts and improvement tips.</p></div>
+    <div id="art"></div>
+    <ul class="points"><li>We check your email is real and send a code to prove it's yours</li><li>Strong passwords only - the checklist shows you how</li><li>Download your own match data and reports</li></ul>
+  </section>
+  <section class="auth-panel"><div class="inner"><h2>Create your account</h2><p class="muted" style="margin-top:0">It takes about a minute.</p><div id="box"></div></div></section>
+</div>
+<script src="/js/common.js"></script>
+<script src="/js/fx.js"></script>
+<script src="/js/auth.js"></script>
+<script>
+renderHeader('');
+$('#art').innerHTML = Auth.artScene();
+Auth.mountRegister($('#box'), { next: '/me.html' });
+</script>
+</body>
+</html>

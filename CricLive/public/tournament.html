@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a3a2a">
+  <title>Tournament - CricLive</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <div id="page"><div class="loader" role="status"><span class="spin-ball" aria-hidden="true"></span>Loading…</div></div>
+  <div class="tabs" id="tabs" style="margin-top:18px">
+    <button data-tab="table" class="active">Points table</button><button data-tab="stats">Stats &amp; charts</button><button data-tab="fixtures">Fixtures &amp; results</button>
+  </div>
+  <section data-pane="table" id="tablePane"></section>
+  <section data-pane="stats" class="hide"><div class="tiles" id="sumTiles" style="margin-bottom:16px"></div><div class="chart-grid" id="charts"></div></section>
+  <section data-pane="fixtures" class="hide" id="fixtures"></section>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/charts.js"></script>
+<script>
+renderHeader('tournaments');
+const id = Number(qs('id'));
+let chartsDrawn = false, C = null;
+$$('#tabs button').forEach(b => b.onclick = () => {
+  $$('#tabs button').forEach(x => x.classList.toggle('active', x === b));
+  $$('[data-pane]').forEach(p => p.classList.toggle('hide', p.dataset.pane !== b.dataset.tab));
+  if (b.dataset.tab === 'stats' && C && !chartsDrawn) drawCharts(C);
+});
+const tile = (k, v) => `<div class="tile"><div class="v">${esc(v)}</div><div class="k">${k}</div></div>`;
+
+function draw(t) {
+  document.title = t.name + ' - CricLive';
+  $('#page').innerHTML = `<div class="card"><h1 style="margin-bottom:4px">${esc(t.name)}</h1>
+      <div class="muted">${esc(t.organizer || '')}${t.venue ? ' &middot; ' + esc(t.venue) : ''} &middot; ${fmtDate(t.start_date, false)} - ${fmtDate(t.end_date, false)} &middot; ${t.overs} overs per side</div></div>`;
+  $('#tablePane').innerHTML = `<div class="card table-wrap"><table>
+      <tr><th>#</th><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">L</th><th class="num">T</th><th class="num">NR</th><th class="num">Pts</th><th class="num">NRR</th><th>Last 5</th></tr>
+      ${t.points_table.map((r, i) => `<tr><td>${i + 1}</td><td><a href="/team.html?id=${r.team.id}">${teamDot(r.team)}<b>${esc(r.team.name)}</b></a></td>
+        <td class="num">${r.played}</td><td class="num">${r.won}</td><td class="num">${r.lost}</td><td class="num">${r.tied}</td><td class="num">${r.nr}</td><td class="num"><b>${r.points}</b></td><td class="num">${r.nrr}</td>
+        <td>${r.form.map(f => `<span class="form-chip ${f}" title="${{ W: 'Won', L: 'Lost', T: 'Tied', N: 'No result' }[f]}">${f === 'N' ? '-' : f}</span>`).join('')}</td></tr>`).join('')}
+    </table><p class="small muted">Win = 2 points, tie or no result = 1 point. NRR = net run rate (a team bowled out counts as using all its overs).</p></div>`;
+  const sec = (title, list) => list.length ? `<div class="section-title"><h2>${title}</h2></div><div class="grid grid-2">${list.map(matchCard).join('')}</div>` : '';
+  $('#fixtures').innerHTML = sec('Live', t.matches.filter(m => m.status === 'live')) + sec('Upcoming fixtures', t.matches.filter(m => m.status === 'scheduled'))
+    + sec('Results', t.matches.filter(m => m.status === 'completed' || m.status === 'abandoned')) || '<div class="empty">No fixtures yet.</div>';
+}
+
+function drawCharts(c) {
+  chartsDrawn = true;
+  const s = c.summary;
+  $('#sumTiles').innerHTML = tile('Matches played', s.matches) + tile('Runs', s.runs) + tile('Wickets', s.wickets) + tile('Fours', s.fours) + tile('Sixes', s.sixes) + tile('Fifties', s.fifties);
+  $('#charts').innerHTML = [chartCard('cTeamRuns'), chartCard('cRR'), chartCard('cBat'), chartCard('cBowl'), chartCard('cBnd'), chartCard('cHist'),
+    `<div class="card"><h3>Highest team totals</h3>${c.highest_totals.map((h, i) => `<div class="leader-row"><a href="/match.html?id=${h.match_id}">${i + 1}. ${esc(h.team)}</a><b class="num">${h.runs}/${h.wickets} <span class="muted small">(${h.overs})</span></b></div>`).join('') || '<div class="muted">No completed innings yet</div>'}</div>`].join('');
+  Charts.bar($('#cTeamRuns'), { title: 'Total runs by team', horizontal: true, data: c.team_runs.map(t => ({ label: t.label, value: t.value, href: '/team.html?id=' + t.id })), valueName: 'Runs', labelName: 'Team' });
+  Charts.grouped($('#cRR'), { title: 'Run rate vs economy', subtitle: 'Runs per over scored (batting) and conceded (bowling)', labels: c.run_rates.map(r => r.label),
+    series: [{ name: 'Batting run rate', values: c.run_rates.map(r => r.batting) }, { name: 'Bowling economy', values: c.run_rates.map(r => r.bowling), slot: 1 }], labelName: 'Team' });
+  Charts.bar($('#cBat'), { title: 'Top 10 run scorers', horizontal: true, data: c.top_batters.map(b => ({ label: b.label, value: b.value, extra: 'Strike rate ' + b.sr, href: '/player.html?id=' + b.id })), valueName: 'Runs', labelName: 'Player' });
+  Charts.bar($('#cBowl'), { title: 'Top 10 wicket takers', horizontal: true, slot: 2, data: c.top_bowlers.map(b => ({ label: b.label, value: b.value, extra: 'Economy ' + b.econ, href: '/player.html?id=' + b.id })), valueName: 'Wickets', labelName: 'Player' });
+  Charts.grouped($('#cBnd'), { title: 'Boundaries by team', labels: c.boundaries.map(b => b.label),
+    series: [{ name: 'Fours', values: c.boundaries.map(b => b.fours) }, { name: 'Sixes', values: c.boundaries.map(b => b.sixes), slot: 3 }], labelName: 'Team' });
+  Charts.bar($('#cHist'), { title: 'Distribution of individual scores', subtitle: 'How many innings ended in each run range', data: c.score_distribution, valueName: 'Innings', labelName: 'Runs', valueLabels: true, slot: 0 });
+}
+
+async function load() {
+  try {
+    const [t, c] = await Promise.all([api('/api/tournaments/' + id), api('/api/tournaments/' + id + '/charts')]);
+    draw(t); C = c;
+    if (!$('[data-pane="stats"]').classList.contains('hide')) drawCharts(c); else chartsDrawn = false;
+  } catch (e) { $('#page').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+load();
+let tm; liveStream(null, { summary(m) { if (Number(m.tournament_id) === id) { clearTimeout(tm); tm = setTimeout(load, 600); } } });
+</script>
+</body>
+</html>
